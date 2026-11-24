@@ -1,0 +1,825 @@
+{
+  "info": {
+    "_postman_id": "b3e921d7-8395-4654-9a25-c6198f1fbe14",
+    "name": "Auth & Vendor Onboarding API (EcoShop)",
+    "description": "Complete collection for Auth & Multi-Vendor Onboarding flows in Modules/Auth and Modules/Vendor.\nCompatible with Postman and Apidog.\n\n### Included Workflows:\n1. Customer Registration & Login\n2. New Vendor Self-Registration (Public)\n3. Existing Customer Upgrade to Vendor (Sell on Platform / Apply)\n4. Vendor KYC Document Upload & Shop Profile\n5. Admin Vendor Moderation (Review, Approve, Reject, Suspend)\n6. Passwordless OTP Auth (Admin & Vendor)\n7. Address Book & Device Management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customer_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "vendor_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otp_code",
+      "value": "123456",
+      "type": "string"
+    },
+    {
+      "key": "vendor_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "document_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "address_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "device_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Public Auth & Registration",
+      "item": [
+        {
+          "name": "Customer Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('customer_token', res.data.token);",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    console.log('Customer token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Customer\",\n  \"email\": \"customer@example.com\",\n  \"phone\": \"+8801711000001\",\n  \"password\": \"Password123!\",\n  \"password_confirmation\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/user/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "user", "register"]
+            },
+            "description": "Public customer registration."
+          }
+        },
+        {
+          "name": "Customer Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('customer_token', res.data.token);",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    console.log('Customer token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"Password123!\",\n  \"device_name\": \"Postman / Apidog\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/user/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "user", "login"]
+            },
+            "description": "Customer login."
+          }
+        },
+        {
+          "name": "Vendor Self-Registration (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('vendor_token', res.data.token);",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    if (res.data.shop && res.data.shop.uuid) {",
+                  "        pm.collectionVariables.set('vendor_uuid', res.data.shop.uuid);",
+                  "    }",
+                  "    console.log('Vendor token & UUID saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah Merchant\",\n  \"email\": \"merchant@example.com\",\n  \"phone\": \"+8801722000002\",\n  \"password\": \"Password123!\",\n  \"password_confirmation\": \"Password123!\",\n  \"shop_name\": \"Sarah Fashion House\",\n  \"business_type\": \"Individual / Private\",\n  \"description\": \"Premium fashion and lifestyle products\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/vendor/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "vendor", "register"]
+            },
+            "description": "Path 1: Public self-registration for new vendors. Creates user, assigns vendor role, creates shop with status 'pending'."
+          }
+        },
+        {
+          "name": "Vendor Login (Password-based)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('vendor_token', res.data.token);",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    console.log('Vendor token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"merchant@example.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/vendor/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "vendor", "login"]
+            },
+            "description": "Password-based login for active vendors."
+          }
+        },
+        {
+          "name": "Admin Login (Password-based)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('admin_token', res.data.token);",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    console.log('Admin token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/admin/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "admin", "login"]
+            },
+            "description": "Admin login."
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/password/forgot",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "password", "forgot"]
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@example.com\",\n  \"code\": \"{{otp_code}}\",\n  \"password\": \"NewPassword123!\",\n  \"password_confirmation\": \"NewPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/password/reset",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "password", "reset"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Customer Upgrade to Vendor (Path 2)",
+      "item": [
+        {
+          "name": "Customer Applies to Become a Vendor (Sell on Platform)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.uuid) {",
+                  "    pm.collectionVariables.set('vendor_uuid', res.data.uuid);",
+                  "    console.log('Vendor UUID saved:', res.data.uuid);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shop_name\": \"John Gadgets Store\",\n  \"phone\": \"+8801711000001\",\n  \"description\": \"Authorized gadgets and smart devices store\",\n  \"business_type\": \"Sole Proprietorship\",\n  \"business_registration_number\": \"TRAD/DNCC/123456/2026\",\n  \"tax_id\": \"TIN-9876543210\",\n  \"website\": \"https://johngadgets.com\",\n  \"address_line_1\": \"Level 3, Multiplan Center\",\n  \"city\": \"Dhaka\",\n  \"state\": \"Dhaka\",\n  \"postal_code\": \"1205\",\n  \"country\": \"Bangladesh\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/apply",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "apply"]
+            },
+            "description": "Path 2: Logged-in customer upgrades to vendor without needing new credentials. Application status is set to 'pending' awaiting admin review."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Vendor Portal (Profile & KYC Documents)",
+      "item": [
+        {
+          "name": "Get Vendor Shop Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "profile"]
+            },
+            "description": "Fetch the authenticated vendor's full shop profile, addresses, bank accounts, and documents."
+          }
+        },
+        {
+          "name": "Update Vendor Shop Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shop_name\": \"Sarah Fashion House Updated\",\n  \"description\": \"Updated store description with exclusive collections.\",\n  \"business_type\": \"Registered LLC\",\n  \"website\": \"https://sarahfashion.com\",\n  \"return_policy\": \"7 days easy return\",\n  \"shipping_policy\": \"Delivered within 48 hours in Dhaka\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "profile"]
+            },
+            "description": "Update vendor shop profile."
+          }
+        },
+        {
+          "name": "Upload KYC Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.id) {",
+                  "    pm.collectionVariables.set('document_id', res.data.id);",
+                  "    console.log('Document ID saved:', res.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "type", "value": "trade_license", "type": "text" },
+                { "key": "document_number", "value": "TL-2026-9988", "type": "text" },
+                { "key": "expiry_date", "value": "2027-12-31", "type": "text" },
+                { "key": "document", "type": "file", "src": "" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "documents"]
+            },
+            "description": "Upload Trade License, NID, BIN, or TIN for admin KYC verification."
+          }
+        },
+        {
+          "name": "List KYC Documents",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendor/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendor", "documents"]
+            },
+            "description": "View all uploaded KYC documents and their verification status (pending, verified, rejected)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Admin Vendor Moderation (Review & Approval)",
+      "item": [
+        {
+          "name": "List All Vendors (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.length > 0 && res.data[0].uuid) {",
+                  "    pm.collectionVariables.set('vendor_uuid', res.data[0].uuid);",
+                  "    console.log('Admin: First vendor UUID saved:', res.data[0].uuid);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors?status=pending",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors"],
+              "query": [
+                { "key": "status", "value": "pending" },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Admin lists vendors filtered by status (pending, active, suspended, rejected)."
+          }
+        },
+        {
+          "name": "Get Vendor Details with KYC (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors/{{vendor_uuid}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors", "{{vendor_uuid}}"]
+            },
+            "description": "Admin inspects full vendor record, owner details, KYC documents, and bank info."
+          }
+        },
+        {
+          "name": "Verify Vendor Document (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors/documents/{{document_id}}/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors", "documents", "{{document_id}}", "verify"]
+            },
+            "description": "Admin marks a specific KYC document as verified."
+          }
+        },
+        {
+          "name": "Approve Vendor (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors/{{vendor_uuid}}/approve",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors", "{{vendor_uuid}}", "approve"]
+            },
+            "description": "Admin approves vendor. Status changes to 'active', vendor receives notification and can start publishing products."
+          }
+        },
+        {
+          "name": "Reject Vendor Application (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Invalid trade license image. Please upload a clear scanned copy of your valid 2026 license.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors/{{vendor_uuid}}/reject",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors", "{{vendor_uuid}}", "reject"]
+            },
+            "description": "Admin rejects vendor application with a specific reason."
+          }
+        },
+        {
+          "name": "Suspend Vendor (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Multiple customer counterfeit product complaints under dispute investigation.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/vendors/{{vendor_uuid}}/suspend",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "vendors", "{{vendor_uuid}}", "suspend"]
+            },
+            "description": "Admin suspends an active vendor."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Passwordless OTP Auth",
+      "item": [
+        {
+          "name": "Vendor OTP - Send",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.code) {",
+                  "    pm.collectionVariables.set('otp_code', res.data.code);",
+                  "    console.log('OTP Code saved:', res.data.code);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"merchant@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/vendor/otp/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "vendor", "otp", "send"]
+            }
+          }
+        },
+        {
+          "name": "Vendor OTP - Verify",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('vendor_token', res.data.token);",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    console.log('Vendor OTP token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"merchant@example.com\",\n  \"code\": \"{{otp_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/vendor/otp/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "vendor", "otp", "verify"]
+            }
+          }
+        },
+        {
+          "name": "Admin OTP - Send",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.code) {",
+                  "    pm.collectionVariables.set('otp_code', res.data.code);",
+                  "    console.log('Admin OTP Code saved:', res.data.code);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/admin/otp/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "admin", "otp", "send"]
+            }
+          }
+        },
+        {
+          "name": "Admin OTP - Verify",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('admin_token', res.data.token);",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    console.log('Admin OTP token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"code\": \"{{otp_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/admin/otp/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "admin", "otp", "verify"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Authenticated User Profile & Devices",
+      "item": [
+        {
+          "name": "Get Authenticated User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah Updated\",\n  \"phone\": \"+8801722000099\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"Password123!\",\n  \"password\": \"NewSecretPassword123!\",\n  \"password_confirmation\": \"NewSecretPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/password/change",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "password", "change"]
+            }
+          }
+        },
+        {
+          "name": "List User Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/devices",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "devices"]
+            }
+          }
+        },
+        {
+          "name": "Logout Current Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Public Storefront (Browse Vendors)",
+      "item": [
+        {
+          "name": "List Active Vendors",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendors"]
+            },
+            "description": "Public storefront listing of approved, active seller shops."
+          }
+        },
+        {
+          "name": "Get Single Shop by Slug",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/vendors/sarah-fashion-house",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vendors", "sarah-fashion-house"]
+            },
+            "description": "Public storefront vendor profile page."
+          }
+        }
+      ]
+    }
+  ]
+}

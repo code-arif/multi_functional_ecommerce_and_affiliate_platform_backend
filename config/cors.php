@@ -24,34 +24,32 @@ return [
     | In production these are loaded from env. Never use ['*'] in production.
     */
     'allowed_origins' => array_filter([
-        env('FRONTEND_URL', 'http://localhost:3001/'),
-        env('ADMIN_URL',    'http://localhost:3004/'),
-        'http://localhost:3000/',
-        'http://localhost:3001/',
-        'http://localhost:3002/',
-        'http://localhost:3003/login',
-        'http://localhost:3004/',
-        'http://localhost:3005/',
-        'http://localhost:3006/',
+        env('FRONTEND_URL', 'http://localhost:3000'),
+        env('ADMIN_URL',    'http://localhost:3001'),
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:3003',
+        'http://localhost:3004',
+        'http://localhost:3005',
+        'http://localhost:3006',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+        'http://127.0.0.1:5173',
     ]),
 
-
-
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^https?://(localhost|127\.0\.0\.1)(:\d+)?$#',
+    ],
 
     /*
     |--------------------------------------------------------------------------
     | Allowed Headers
     |--------------------------------------------------------------------------
     */
-    'allowed_headers' => [
-        'Content-Type',
-        'Accept',
-        'Authorization',
-        'X-Requested-With',
-        'X-Session-ID',     // Guest cart identifier
-        'X-CSRF-TOKEN',
-    ],
+    'allowed_headers' => ['*'],
 
     /*
     |--------------------------------------------------------------------------

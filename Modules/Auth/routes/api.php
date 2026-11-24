@@ -27,20 +27,21 @@ Route::group(['prefix' => 'v1'], function () {
         // Registration & Login
         Route::post('/user/register', [AuthController::class, 'register']); // DONE: User registration
         Route::post('/user/login', [AuthController::class, 'login']); // DONE: User Login
+        Route::post('/vendor/register', [AuthController::class, 'vendorRegister']); // DONE: Self-service vendor registration (customer-front)
 
         // Password-based admin login
         Route::post('admin/login', [AuthController::class, 'adminLogin']); // DONE: Admin login (password based)
 
         // Password-based vendor login
-        Route::post('vendor/login', [AuthController::class, 'vendorLogin']);
+        Route::post('vendor/login', [AuthController::class, 'vendorLogin']); // DONE: Vendor Login (password based)
 
         // Passwordless admin login (OTP-based)
         Route::post('admin/otp/send', [AdminPassLessAuthController::class, 'adminOtpSend']); // DONE: OTP Send (only for admin)
         Route::post('admin/otp/verify', [AdminPassLessAuthController::class, 'adminOtpVerify']); // DONE: OTP Verify (only for admin)
 
         // Passwordless vendor login (OTP-based)
-        Route::post('vendor/otp/send', [VendorPassLessAuthController::class, 'vendorOtpSend']);
-        Route::post('vendor/otp/verify', [VendorPassLessAuthController::class, 'vendorOtpVerify']);
+        Route::post('vendor/otp/send', [VendorPassLessAuthController::class, 'vendorOtpSend']); // DONE: OTP Send (only for vendor)
+        Route::post('vendor/otp/verify', [VendorPassLessAuthController::class, 'vendorOtpVerify']); // DONE: OTP Verify (only for vendor)
 
         // Password Reset
         Route::post('password/forgot', [PasswordResetController::class, 'forgot']);
@@ -54,9 +55,9 @@ Route::group(['prefix' => 'v1'], function () {
     // ─── Authenticated User Routes ──────────────────────────────────
     Route::middleware(['auth:sanctum', 'banned'])->group(function () {
         // Auth — Profile & Session
-        Route::post('auth/logout',         [AuthController::class, 'logout']);
+        Route::post('auth/logout',         [AuthController::class, 'logout']); // DONE: User logout
         Route::post('auth/logout-all',     [AuthController::class, 'logoutAll']);
-        Route::get('auth/me',              [AuthController::class, 'me']);
+        Route::get('auth/me',              [AuthController::class, 'me']); // DONE: Get authenticated user profile
         Route::put('auth/profile',         [AuthController::class, 'updateProfile']);
         Route::post('auth/avatar',         [AuthController::class, 'updateAvatar']);
 

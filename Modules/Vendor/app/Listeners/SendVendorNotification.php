@@ -42,6 +42,13 @@ class SendVendorNotification
                 'action_url' => "/admin/vendors/{$vendor->id}",
             ],
         ]);
+
+        // Send acknowledgement email to the vendor
+        try {
+            \Illuminate\Support\Facades\Mail::to($vendor->email ?: $user->email)->send(new \Modules\Vendor\Emails\VendorWelcomeMail($vendor));
+        } catch (\Throwable $e) {
+            Log::error("Failed to send vendor welcome email: " . $e->getMessage());
+        }
     }
 
     private function handleApproved($vendor, $user): void

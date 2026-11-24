@@ -3,7 +3,7 @@
 namespace Modules\Vendor\Jobs;
 
 use Modules\Vendor\Models\Vendor;
-use Modules\Vendor\Mail\VendorWelcomeMail;
+use Modules\Vendor\Emails\VendorWelcomeMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

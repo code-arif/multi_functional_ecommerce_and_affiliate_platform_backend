@@ -23,7 +23,7 @@ class VendorWelcomeMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your vendor account has been created',
+            subject: 'Vendor Application Received - ' . $this->vendor->shop_name,
         );
     }
 
@@ -31,25 +31,29 @@ class VendorWelcomeMail extends Mailable
     {
         $name  = $this->vendor->user?->name ?? $this->vendor->shop_name;
         $email = $this->vendor->user?->email ?? $this->vendor->email;
+        $storeName = config('app.name', 'Z-SHOP');
 
         $lines = [
             "Hi {$name},",
             '',
-            "Your vendor account for '{$this->vendor->shop_name}' has been created successfully.",
+            "Thank you for applying to sell on {$storeName}! Your vendor account for '{$this->vendor->shop_name}' has been created and received by our compliance team.",
             '',
-            'Login credentials:',
-            "Email: {$email}",
+            'Application Summary:',
+            "- Shop Name: {$this->vendor->shop_name}",
+            "- Store URL Slug: {$this->vendor->slug}",
+            "- Registered Email: {$email}",
+            "- Status: Pending Document Verification",
+            '',
+            'Next Steps:',
+            '1. Our merchant verification team will verify your Trade License and identity credentials within 24 business hours.',
+            '2. An onboarding specialist may reach out to verify your phone number and warehouse pickup location.',
+            '3. Once verified and approved, you will receive an activation email with access to your Seller Center dashboard.',
+            '',
+            'If you have any questions, feel free to reply to this email.',
+            '',
+            'Warm regards,',
+            "{$storeName} Seller Onboarding Team",
         ];
-
-        if ($this->password) {
-            $lines[] = "Password: {$this->password}";
-        }
-
-        $lines[] = '';
-        $lines[] = 'Your account is currently pending approval. You will be able to log in and start selling once an admin activates it.';
-        $lines[] = '';
-        $lines[] = 'Thanks,';
-        $lines[] = config('ecommerce.store_name', 'EcoShop');
 
         return implode(PHP_EOL, $lines);
     }

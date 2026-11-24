@@ -9,7 +9,8 @@ class VendorResource extends JsonResource
     public function toArray($request): array
     {
         return [
-            'uuid' => $this->uuid,
+            'id'               => $this->id,
+            'uuid'             => $this->uuid,
             'user_id'          => $this->user_id,
             'shop_name'        => $this->shop_name,
             'slug'             => $this->slug,

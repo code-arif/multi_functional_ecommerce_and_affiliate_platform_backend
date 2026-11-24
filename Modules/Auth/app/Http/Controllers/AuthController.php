@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Auth\Http\Requests\LoginRequest;
 use Modules\Auth\Http\Requests\RegisterRequest;
+use Modules\Auth\Http\Requests\VendorRegisterRequest;
 use Modules\Auth\Services\AuthService;
 use Modules\Auth\Transformers\UserResource;
 use Modules\Core\Traits\ApiResponse;
@@ -27,6 +28,20 @@ class AuthController
             'user'  => new UserResource($result['user']),
             'token' => $result['token'],
         ], 'Registration successful.');
+    }
+
+    // Vendor Registration (Self-Service)
+    public function vendorRegister(VendorRegisterRequest $request): JsonResponse
+    {
+        $result = $this->authService->vendorRegister($request->validated());
+
+        return $this->createdResponse([
+            'user'   => new UserResource($result['user']),
+            'shop'   => new VendorResource($result['vendor']->load('profile')),
+            'vendor' => new VendorResource($result['vendor']->load('profile')),
+            'token'  => $result['token'],
+            'status' => 'pending',
+        ], 'Vendor registration submitted successfully. Your shop is pending approval.');
     }
 
     // User Login
