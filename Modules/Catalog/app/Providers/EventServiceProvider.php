@@ -4,13 +4,11 @@ namespace Modules\Catalog\Providers;
 
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 use Modules\Catalog\Events\ProductCreated;
-use Modules\Catalog\Events\ProductUpdated;
 use Modules\Catalog\Events\ProductDeleted;
+use Modules\Catalog\Events\ProductUpdated;
 use Modules\Catalog\Listeners\LogProductActivity;
 use Modules\Catalog\Models\Brand;
-use Modules\Catalog\Models\Category;
 use Modules\Catalog\Observers\BrandObserver;
-use Modules\Catalog\Observers\CategoryObserver;
 
 class EventServiceProvider extends ServiceProvider
 {
@@ -27,7 +25,6 @@ class EventServiceProvider extends ServiceProvider
     ];
 
     protected $observers = [
-        Category::class => [CategoryObserver::class],
         Brand::class => [BrandObserver::class],
     ];
 }

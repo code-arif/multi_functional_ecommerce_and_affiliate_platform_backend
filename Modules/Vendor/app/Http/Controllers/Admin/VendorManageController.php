@@ -59,7 +59,8 @@ class VendorManageController extends Controller
     public function show(string $uuid): JsonResponse
     {
         $vendor = Vendor::with(['user', 'profile', 'addresses', 'bankAccounts', 'documents', 'staff.user'])
-        ->where('uuid', $uuid)->firstOrFail();
+            ->where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))
+            ->firstOrFail();
         return $this->successResponse(new VendorResource($vendor));
     }
 
@@ -69,7 +70,7 @@ class VendorManageController extends Controller
      */
     public function approve(string $uuid, Request $request): JsonResponse
     {
-        $vendor = Vendor::where('uuid', $uuid)->first();
+        $vendor = Vendor::where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))->first();
 
         if(!$vendor){
             return $this->notFoundResponse('Vendor not found.');
@@ -88,7 +89,7 @@ class VendorManageController extends Controller
      */
     public function reject(string $uuid, UpdateVendorStatusRequest $request): JsonResponse
     {
-        $vendor = Vendor::where('uuid', $uuid)->first();
+        $vendor = Vendor::where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))->first();
 
         if(!$vendor){
             return $this->notFoundResponse('Vendor not found.');
@@ -107,7 +108,7 @@ class VendorManageController extends Controller
      */
     public function suspend(string $uuid, UpdateVendorStatusRequest $request): JsonResponse
     {
-        $vendor = Vendor::where('uuid', $uuid)->first();
+        $vendor = Vendor::where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))->first();
 
         if(!$vendor){
             return $this->notFoundResponse('Vendor not found.');
@@ -136,7 +137,7 @@ class VendorManageController extends Controller
      */
     public function makePending(string $uuid): JsonResponse
     {
-        $vendor = Vendor::where('uuid', $uuid)->first();
+        $vendor = Vendor::where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))->first();
 
         if(!$vendor){
             return $this->notFoundResponse('Vendor not found.');
@@ -158,17 +159,21 @@ class VendorManageController extends Controller
      * POST /api/v1/admin/vendors/documents/{document}/verify
      * Verify a vendor document
      */
-    public function verifyDocument(VendorDocument $document): JsonResponse
+    public function verifyDocument($document): JsonResponse
     {
-        $document->update([
+        $doc = $document instanceof VendorDocument
+            ? $document
+            : VendorDocument::where(fn($q) => $q->where('uuid', $document)->orWhere('id', $document))->firstOrFail();
+
+        $doc->update([
             'status' => 'verified',
             'verified_at' => now(),
-            'verified_by' => request()->user()->id,
+            'verified_by' => request()->user()?->id,
         ]);
 
         return $this->successResponse(
-            new VendorDocumentResource($document->fresh()),
-            'Document verified.'
+            new VendorDocumentResource($doc->fresh()),
+            'Document verified successfully.'
         );
     }
 
@@ -176,15 +181,19 @@ class VendorManageController extends Controller
      * POST /api/v1/admin/vendors/documents/{document}/reject
      * Reject a vendor document
      */
-    public function rejectDocument(VendorDocument $document, UpdateVendorStatusRequest $request): JsonResponse
+    public function rejectDocument($document, UpdateVendorStatusRequest $request): JsonResponse
     {
-        $document->update([
+        $doc = $document instanceof VendorDocument
+            ? $document
+            : VendorDocument::where(fn($q) => $q->where('uuid', $document)->orWhere('id', $document))->firstOrFail();
+
+        $doc->update([
             'status' => 'rejected',
             'rejection_reason' => $request->validated('reason'),
         ]);
 
         return $this->successResponse(
-            new VendorDocumentResource($document->fresh()),
+            new VendorDocumentResource($doc->fresh()),
             'Document rejected.'
         );
     }

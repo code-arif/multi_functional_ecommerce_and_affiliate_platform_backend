@@ -2,12 +2,17 @@
 
 namespace Modules\Vendor\Listeners;
 
-use Modules\Vendor\Events\VendorRegisteredEvent;
+use App\Models\User;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Modules\Notifications\Models\Notification;
+use Modules\Vendor\Emails\NewVendorAdminAlertMail;
+use Modules\Vendor\Emails\VendorWelcomeMail;
 use Modules\Vendor\Events\VendorApprovedEvent;
+use Modules\Vendor\Events\VendorRegisteredEvent;
 use Modules\Vendor\Events\VendorRejectedEvent;
 use Modules\Vendor\Jobs\SendVendorWelcomeEmail;
-use Modules\Notifications\Models\Notification;
-use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class SendVendorNotification
 {
@@ -31,7 +36,7 @@ class SendVendorNotification
     {
         Log::info("Vendor registered: {$vendor->shop_name} (User: {$user->id})");
 
-        // Create in-app notification for admin
+        // 1. Create in-app notification for admin
         Notification::create([
             'type' => 'vendor_registered',
             'notifiable_type' => get_class($user),
@@ -43,11 +48,23 @@ class SendVendorNotification
             ],
         ]);
 
-        // Send acknowledgement email to the vendor
+        // 2. Queue acknowledgement email to the vendor
         try {
-            \Illuminate\Support\Facades\Mail::to($vendor->email ?: $user->email)->send(new \Modules\Vendor\Emails\VendorWelcomeMail($vendor));
-        } catch (\Throwable $e) {
-            Log::error("Failed to send vendor welcome email: " . $e->getMessage());
+            Mail::to($vendor->email ?: $user->email)->queue(new VendorWelcomeMail($vendor));
+        } catch (Throwable $e) {
+            Log::error("Failed to queue vendor welcome email: " . $e->getMessage());
+        }
+
+        // 3. Queue alert email to the admin
+        try {
+            $adminEmail = User::role('super-admin')->value('email')
+                ?? config('ecommerce.admin_email', 'admin@gmail.com');
+
+            if ($adminEmail) {
+                Mail::to($adminEmail)->queue(new NewVendorAdminAlertMail($vendor));
+            }
+        } catch (Throwable $e) {
+            Log::error("Failed to queue admin vendor alert email: " . $e->getMessage());
         }
     }
 

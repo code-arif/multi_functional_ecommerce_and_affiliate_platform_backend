@@ -10,7 +10,8 @@ class VendorDocumentResource extends JsonResource
     public function toArray($request): array
     {
         return [
-            'uuid' => $this->uuid,
+            'id'               => $this->id,
+            'uuid'             => $this->uuid,
             'type'             => $this->type,
             'document_url'     => $this->document_url,
             'document_number'  => $this->document_number,

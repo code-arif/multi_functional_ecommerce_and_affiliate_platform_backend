@@ -9,11 +9,12 @@ return [
     | Store Identity
     |--------------------------------------------------------------------------
     */
-    'store_name'     => env('STORE_NAME', 'EcoShop'),
-    'store_email'    => env('STORE_EMAIL', 'info@ecoshop.com'),
+    'store_name'     => env('STORE_NAME', 'ZShop'),
+    'store_email'    => env('STORE_EMAIL', 'info@zshop.com'),
     'store_phone'    => env('STORE_PHONE', '+8801700000000'),
     'frontend_url'   => env('FRONTEND_URL', 'http://localhost:3000'),
     'admin_url'      => env('ADMIN_URL', 'http://localhost:3001'),
+    'admin_email'    => env('ADMIN_EMAIL', 'admin@gmail.com'),
 
     /*
     |--------------------------------------------------------------------------
