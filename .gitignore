@@ -11,6 +11,8 @@
 /.phpunit.cache
 /.vscode
 /.zed
+/SRS.md
+/GEMINI_MASTER_PROMPT.md
 /auth.json
 /node_modules
 /public/build
