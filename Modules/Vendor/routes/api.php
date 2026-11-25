@@ -21,7 +21,7 @@ Route::prefix('v1')->group(function () {
 
     // Customer Upgrade: Apply to Become a Vendor
     Route::middleware(['auth:sanctum', 'banned'])->prefix('vendor')->group(function () {
-        Route::post('apply', [VendorController::class, 'apply']);
+        Route::post('apply', [VendorController::class, 'apply']); // DONE: apply as vendor
     });
 
     // Authenticated Vendor Management (Scoped to Active Vendor)
@@ -35,10 +35,10 @@ Route::prefix('v1')->group(function () {
     // Admin-Facing Vendor Moderation & Management
     Route::middleware(['auth:sanctum', 'admin', 'banned'])->prefix('admin')->group(function () {
         Route::prefix('vendors')->middleware('permission:vendors.view')->group(function () {
-            Route::get('/', [VendorManageController::class, 'index']);
-            Route::post('/', [VendorManageController::class, 'store'])->middleware('permission:vendors.create');
-            Route::post('/store', [VendorManageController::class, 'store'])->middleware('permission:vendors.create');
-            Route::get('{uuid}', [VendorManageController::class, 'show']);
+            Route::get('/', [VendorManageController::class, 'index']); // DONE: list vendors for admin
+            // Route::post('/', [VendorManageController::class, 'store'])->middleware('permission:vendors.create'); // DONE: create vendor
+            Route::post('/store', [VendorManageController::class, 'store'])->middleware('permission:vendors.create'); // DONE: create vendor
+            Route::get('{uuid}', [VendorManageController::class, 'show']); // DONE: Vendor details
             Route::post('{uuid}/approve', [VendorManageController::class, 'approve'])->middleware('permission:vendors.approve');
             Route::post('{uuid}/reject', [VendorManageController::class, 'reject'])->middleware('permission:vendors.approve');
             Route::post('{uuid}/suspend', [VendorManageController::class, 'suspend'])->middleware('permission:vendors.manage');

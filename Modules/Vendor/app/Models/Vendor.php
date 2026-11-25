@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Modules\Core\Traits\HasUuid;
+use Modules\Orders\Models\Order;
+use Modules\Product\Models\VendorProductPrice;
 
 class Vendor extends Model
 {
@@ -77,6 +79,16 @@ class Vendor extends Model
     public function walletTransactions(): HasMany
     {
         return $this->hasMany(VendorWalletTransaction::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function vendorProductPrices(): HasMany
+    {
+        return $this->hasMany(VendorProductPrice::class);
     }
 
     public function scopeActive($query)

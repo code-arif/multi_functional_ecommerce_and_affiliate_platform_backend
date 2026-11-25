@@ -4,8 +4,11 @@ namespace Modules\Vendor\Providers;
 
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 use Modules\Vendor\Events\VendorApprovedEvent;
+use Modules\Vendor\Events\VendorDocumentRejectedEvent;
+use Modules\Vendor\Events\VendorDocumentVerifiedEvent;
 use Modules\Vendor\Events\VendorRegisteredEvent;
 use Modules\Vendor\Events\VendorRejectedEvent;
+use Modules\Vendor\Events\VendorSuspendedEvent;
 use Modules\Vendor\Listeners\SendVendorNotification;
 
 class EventServiceProvider extends ServiceProvider
@@ -23,6 +26,15 @@ class EventServiceProvider extends ServiceProvider
             SendVendorNotification::class,
         ],
         VendorRejectedEvent::class => [
+            SendVendorNotification::class,
+        ],
+        VendorSuspendedEvent::class => [
+            SendVendorNotification::class,
+        ],
+        VendorDocumentVerifiedEvent::class => [
+            SendVendorNotification::class,
+        ],
+        VendorDocumentRejectedEvent::class => [
             SendVendorNotification::class,
         ],
     ];

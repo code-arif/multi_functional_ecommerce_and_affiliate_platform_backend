@@ -13,6 +13,7 @@ return [
     'store_email'    => env('STORE_EMAIL', 'info@zshop.com'),
     'store_phone'    => env('STORE_PHONE', '+8801700000000'),
     'frontend_url'   => env('FRONTEND_URL', 'http://localhost:3000'),
+    'vendor_url'     => env('VENDOR_URL', 'http://localhost:3003'),
     'admin_url'      => env('ADMIN_URL', 'http://localhost:3001'),
     'admin_email'    => env('ADMIN_EMAIL', 'admin@gmail.com'),
 

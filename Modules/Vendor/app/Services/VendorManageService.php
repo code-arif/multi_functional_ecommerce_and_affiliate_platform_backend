@@ -1,22 +1,27 @@
 <?php
 namespace Modules\Vendor\Services;
 
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use App\Models\User;
+use Modules\Vendor\Emails\VendorWelcomeMail;
 use Modules\Vendor\Events\VendorApprovedEvent;
+use Modules\Vendor\Events\VendorDocumentRejectedEvent;
+use Modules\Vendor\Events\VendorDocumentVerifiedEvent;
 use Modules\Vendor\Events\VendorRegisteredEvent;
 use Modules\Vendor\Events\VendorRejectedEvent;
-use Modules\Vendor\Emails\VendorWelcomeMail;
+use Modules\Vendor\Events\VendorSuspendedEvent;
 use Modules\Vendor\Models\Vendor;
+use Modules\Vendor\Models\VendorDocument;
+use Throwable;
 
 class VendorManageService
 {
     /**
      * Admin creates a vendor: creates the user account, assigns the vendor role,
-     * creates the vendor record as pending, and emails the credentials immediately.
+     * creates the vendor record as pending, and queues credentials email.
      */
     public function create(array $data): Vendor
     {
@@ -44,11 +49,11 @@ class VendorManageService
             ]);
         });
 
-        // Reuse the existing event flow (logs + notifies admins)
-        VendorRegisteredEvent::dispatch($vendor);
+        // Notify admins without queuing a duplicate welcome email (password email is queued below)
+        VendorRegisteredEvent::dispatch($vendor, true);
 
-        // Vendor receives credentials immediately after creation
-        $this->sendWelcomeEmail($vendor, $data['password']);
+        // Queue welcome email with login credentials
+        $this->queueWelcomeEmail($vendor, $data['password']);
 
         return $vendor;
     }
@@ -98,15 +103,55 @@ class VendorManageService
             'rejection_reason' => $reason,
         ]);
 
-        return $vendor->fresh();
+        $vendor = $vendor->fresh();
+
+        VendorSuspendedEvent::dispatch($vendor, $reason);
+
+        return $vendor;
     }
 
-    private function sendWelcomeEmail(Vendor $vendor, string $password): void
+    /**
+     * Verify a vendor KYC document and notify the vendor.
+     */
+    public function verifyDocument(VendorDocument $document, ?User $admin = null): VendorDocument
+    {
+        $document->update([
+            'status'           => 'verified',
+            'rejection_reason' => null,
+            'verified_at'      => now(),
+            'verified_by'      => $admin?->id,
+        ]);
+
+        $document = $document->fresh();
+
+        VendorDocumentVerifiedEvent::dispatch($document);
+
+        return $document;
+    }
+
+    /**
+     * Reject a vendor KYC document with a reason and notify the vendor.
+     */
+    public function rejectDocument(VendorDocument $document, string $reason): VendorDocument
+    {
+        $document->update([
+            'status'           => 'rejected',
+            'rejection_reason' => $reason,
+        ]);
+
+        $document = $document->fresh();
+
+        VendorDocumentRejectedEvent::dispatch($document, $reason);
+
+        return $document;
+    }
+
+    private function queueWelcomeEmail(Vendor $vendor, string $password): void
     {
         try {
-            Mail::to($vendor->email)->send(new VendorWelcomeMail($vendor, $password));
-        } catch (\Throwable $e) {
-            Log::warning("Failed to send vendor welcome email: {$e->getMessage()}");
+            Mail::to($vendor->email)->queue(new VendorWelcomeMail($vendor, $password));
+        } catch (Throwable $e) {
+            Log::warning("Failed to queue vendor welcome email: {$e->getMessage()}");
         }
     }
 

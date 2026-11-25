@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Modules\Vendor\Models\Vendor;
 use Modules\Vendor\Models\VendorDocument;
 use Modules\Vendor\Http\Requests\UpdateVendorStatusRequest;
+use Modules\Vendor\Transformers\AdminVendorListResource;
 use Modules\Vendor\Transformers\VendorResource;
 use Modules\Vendor\Transformers\VendorListResource;
 use Modules\Vendor\Transformers\VendorDocumentResource;
@@ -25,17 +26,35 @@ class VendorManageController extends Controller
 
     /**
      * GET /api/v1/admin/vendors
-     * List all vendors for admin
+     * List all vendors for admin (lightweight table payload)
      */
     public function index(Request $request): JsonResponse
     {
-        $vendors = Vendor::with(['user', 'profile'])
+        $vendors = Vendor::query()
+            ->select([
+                'id',
+                'uuid',
+                'user_id',
+                'shop_name',
+                'email',
+                'phone',
+                'logo',
+                'status',
+                'total_earned',
+                'created_at',
+            ])
+            ->with(['user:id,name'])
+            ->withCount([
+                'vendorProductPrices as products_count',
+                'orders',
+            ])
+            ->withSum('orders', 'total_amount')
             ->when($request->status, fn($q, $s) => $q->where('status', $s))
             ->when($request->search, fn($q, $s) => $q->where('shop_name', 'like', "%{$s}%"))
             ->latest()
             ->paginate($request->per_page ?? 20);
 
-        return $this->paginatedResponse(VendorResource::collection($vendors));
+        return $this->paginatedResponse(AdminVendorListResource::collection($vendors));
     }
 
     /**
@@ -127,8 +146,25 @@ class VendorManageController extends Controller
      */
     public function pending(): JsonResponse
     {
-        $vendors = Vendor::with('user')->pending()->latest()->get();
-        return $this->successResponse(VendorResource::collection($vendors));
+        $vendors = Vendor::query()
+            ->select([
+                'id',
+                'uuid',
+                'user_id',
+                'shop_name',
+                'email',
+                'phone',
+                'logo',
+                'status',
+                'total_earned',
+                'created_at',
+            ])
+            ->with(['user:id,name'])
+            ->pending()
+            ->latest()
+            ->get();
+
+        return $this->successResponse(AdminVendorListResource::collection($vendors));
     }
 
     /**
@@ -165,14 +201,10 @@ class VendorManageController extends Controller
             ? $document
             : VendorDocument::where(fn($q) => $q->where('uuid', $document)->orWhere('id', $document))->firstOrFail();
 
-        $doc->update([
-            'status' => 'verified',
-            'verified_at' => now(),
-            'verified_by' => request()->user()?->id,
-        ]);
+        $doc = $this->vendorManageService->verifyDocument($doc, request()->user());
 
         return $this->successResponse(
-            new VendorDocumentResource($doc->fresh()),
+            new VendorDocumentResource($doc),
             'Document verified successfully.'
         );
     }
@@ -187,13 +219,10 @@ class VendorManageController extends Controller
             ? $document
             : VendorDocument::where(fn($q) => $q->where('uuid', $document)->orWhere('id', $document))->firstOrFail();
 
-        $doc->update([
-            'status' => 'rejected',
-            'rejection_reason' => $request->validated('reason'),
-        ]);
+        $doc = $this->vendorManageService->rejectDocument($doc, $request->validated('reason'));
 
         return $this->successResponse(
-            new VendorDocumentResource($doc->fresh()),
+            new VendorDocumentResource($doc),
             'Document rejected.'
         );
     }

@@ -16,6 +16,7 @@ class ApplyVendorRequest extends FormRequest
     {
         return [
             'shop_name'                    => ['required', 'string', 'max:200', Rule::unique('vendors', 'shop_name')],
+            'email'                        => ['nullable', 'string', 'email', 'max:255'],
             'phone'                        => ['nullable', 'string', 'max:20'],
             'description'                  => ['nullable', 'string', 'max:2000'],
             'business_type'                => ['nullable', 'string', 'max:100'],
@@ -28,6 +29,13 @@ class ApplyVendorRequest extends FormRequest
             'state'                        => ['nullable', 'string', 'max:100'],
             'postal_code'                  => ['nullable', 'string', 'max:20'],
             'country'                      => ['nullable', 'string', 'max:100'],
+            'bank_name'                    => ['nullable', 'string', 'max:200'],
+            'branch_name'                  => ['nullable', 'string', 'max:200'],
+            'account_name'                 => ['nullable', 'string', 'max:200'],
+            'account_number'               => ['nullable', 'string', 'max:100'],
+            'routing_number'               => ['nullable', 'string', 'max:50'],
+            'mobile_banking_provider'      => ['nullable', 'string', 'max:50'],
+            'mobile_banking_number'        => ['nullable', 'string', 'max:50'],
         ];
     }
 

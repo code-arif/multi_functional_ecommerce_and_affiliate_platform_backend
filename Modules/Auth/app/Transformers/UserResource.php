@@ -19,6 +19,22 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'roles' => $this->whenLoaded('roles', fn() => $this->roles->pluck('name')),
             'default_address' => $this->whenLoaded('defaultAddress'),
+            'vendor' => $this->whenLoaded('vendor', function () {
+                if (!$this->vendor) {
+                    return null;
+                }
+                return [
+                    'id' => $this->vendor->id,
+                    'uuid' => $this->vendor->uuid,
+                    'shop_name' => $this->vendor->shop_name,
+                    'slug' => $this->vendor->slug,
+                    'email' => $this->vendor->email,
+                    'phone' => $this->vendor->phone,
+                    'status' => $this->vendor->status,
+                    'rejection_reason' => $this->vendor->rejection_reason,
+                    'created_at' => $this->vendor->created_at,
+                ];
+            }),
             'email_verified_at' => $this->email_verified_at,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,

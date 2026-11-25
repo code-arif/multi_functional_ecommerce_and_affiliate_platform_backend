@@ -12,6 +12,7 @@ class VendorRegisteredEvent
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
-        public Vendor $vendor
+        public Vendor $vendor,
+        public bool $skipVendorWelcomeMail = false
     ) {}
 }

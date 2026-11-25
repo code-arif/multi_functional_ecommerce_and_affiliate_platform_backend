@@ -53,7 +53,7 @@ class AuthController
             $request->ip()
         );
         return $this->successResponse([
-            'user'  => new UserResource($result['user']),
+            'user'  => new UserResource($result['user']->load('roles', 'vendor')),
             'token' => $result['token'],
         ], 'Login successful.');
     }
@@ -108,7 +108,7 @@ class AuthController
     // Get the authenticated user's profile
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->load('roles', 'defaultAddress');
+        $user = $request->user()->load('roles', 'defaultAddress', 'vendor');
         return $this->successResponse(new UserResource($user));
     }
 

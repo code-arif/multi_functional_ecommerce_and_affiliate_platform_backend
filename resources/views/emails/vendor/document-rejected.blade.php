@@ -1,0 +1,97 @@
+@extends('emails.layouts.master')
+
+@section('title', 'KYC Document Rejected - ' . ($vendor?->shop_name ?? 'Seller Account'))
+@section('badge', 'KYC Action Required')
+
+@section('content')
+@php
+    $docLabel = strtoupper(str_replace('_', ' ', $document->type));
+@endphp
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        <td style="padding-bottom: 8px;">
+            <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+                KYC Document Requires Re-Submission
+            </h1>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding-bottom: 24px;">
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                Hello {{ $vendor?->user?->name ?? $vendor?->shop_name ?? 'Seller' }},<br />
+                During compliance review for <strong>{{ $vendor?->shop_name ?? 'your store' }}</strong>, one of your submitted KYC documents could not be verified and has been marked as rejected.
+            </p>
+        </td>
+    </tr>
+
+    <!-- Document Rejection Details Table -->
+    <tr>
+        <td style="padding-bottom: 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden; background-color: #ffffff;">
+                <tr style="background-color: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+                    <td colspan="2" style="padding: 12px 16px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #334155; letter-spacing: 0.5px;">
+                        Document Review Details
+                    </td>
+                </tr>
+                <tr>
+                    <td class="data-table-label" width="40%" style="padding: 10px 16px; font-size: 13px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; background-color: #fafafa;">
+                        Document Type
+                    </td>
+                    <td class="data-table-value" width="60%" style="padding: 10px 16px; font-size: 13px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
+                        {{ $docLabel }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="data-table-label" style="padding: 10px 16px; font-size: 13px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; background-color: #fafafa;">
+                        Document Number
+                    </td>
+                    <td class="data-table-value" style="padding: 10px 16px; font-size: 13px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">
+                        {{ $document->document_number ?? 'Not provided' }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="data-table-label" style="padding: 10px 16px; font-size: 13px; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; background-color: #fafafa;">
+                        Status
+                    </td>
+                    <td class="data-table-value" style="padding: 10px 16px; font-size: 13px; font-weight: 700; color: #b91c1c; border-bottom: 1px solid #f1f5f9;">
+                        Rejected
+                    </td>
+                </tr>
+                <tr>
+                    <td class="data-table-label" style="padding: 10px 16px; font-size: 13px; font-weight: 600; color: #64748b; background-color: #fafafa;">
+                        Rejection Reason
+                    </td>
+                    <td class="data-table-value" style="padding: 10px 16px; font-size: 13px; color: #1e293b; line-height: 1.5;">
+                        {{ $reason }}
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr>
+        <td style="padding-bottom: 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 20px;">
+                <tr>
+                    <td style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: #0f172a; padding-bottom: 10px; letter-spacing: 0.5px;">
+                        Required Next Action
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-size: 13px; line-height: 1.6; color: #475569;">
+                        Please upload a clear, valid replacement scan (PDF, JPG, or PNG) in your Seller Portal under KYC Documents so our compliance team can complete verification.
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr>
+        <td style="border-top: 1px solid #e2e8f0; padding-top: 16px;">
+            <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #64748b;">
+                Compliance Support: <a href="mailto:{{ config('ecommerce.store_email', 'info@zshop.com') }}" style="color: #2563eb; text-decoration: none;">{{ config('ecommerce.store_email', 'info@zshop.com') }}</a>
+            </p>
+        </td>
+    </tr>
+</table>
+@endsection
