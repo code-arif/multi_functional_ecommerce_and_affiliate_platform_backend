@@ -44,8 +44,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('media/{medium}',         [MediaController::class, 'destroy']);
 
     // Currencies — write operations require admin
-    Route::post('currencies',               [CurrencyController::class, 'store'])
-        ->middleware('admin');
+    Route::post('currencies',               [CurrencyController::class, 'store'])->middleware('admin');
     Route::put('currencies/{currency}',     [CurrencyController::class, 'update'])
         ->middleware('admin');
     Route::delete('currencies/{currency}',  [CurrencyController::class, 'destroy'])
