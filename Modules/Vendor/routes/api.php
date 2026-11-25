@@ -29,16 +29,20 @@ Route::prefix('v1')->group(function () {
         Route::post('apply', [VendorController::class, 'apply']); // DONE: apply as vendor
     });
 
-    // Authenticated Vendor Management (Scoped to Active Vendor)
-    Route::middleware(['auth:sanctum', 'vendor', 'banned'])->prefix('vendor')->group(function () {
-        Route::get('dashboard', [VendorDashboardController::class, 'index']); // DONE: vendor dashboard stats
-
+    // Compliance & Read-Only Shop Routes (Accessible when pending / suspended / rejected)
+    Route::middleware(['auth:sanctum', 'vendor.auth', 'banned'])->prefix('vendor')->group(function () {
         Route::get('profile', [VendorController::class, 'profile']); // DONE: get vendor profile
-        Route::put('profile', [VendorController::class, 'updateProfile']); // DONE: update shop profile
 
         Route::get('documents', [VendorController::class, 'documents']); // DONE: list KYC documents
         Route::post('documents', [VendorController::class, 'uploadDocument']); // DONE: upload KYC document
         Route::delete('documents/{document}', [VendorController::class, 'destroyDocument']); // DONE: delete KYC document
+    });
+
+    // Authenticated Vendor Management (Scoped to Active Vendor)
+    Route::middleware(['auth:sanctum', 'vendor', 'banned'])->prefix('vendor')->group(function () {
+        Route::get('dashboard', [VendorDashboardController::class, 'index']); // DONE: vendor dashboard stats
+
+        Route::put('profile', [VendorController::class, 'updateProfile']); // DONE: update shop profile
 
         Route::get('settings', [VendorSettingsController::class, 'index']); // DONE: get vendor settings
         Route::post('settings', [VendorSettingsController::class, 'update']); // DONE: update vendor settings

@@ -25,7 +25,22 @@ class VendorMiddleware
         }
 
         if ($vendor->status !== 'active') {
-            return $this->forbiddenResponse('Your vendor account is not active.');
+            $message = match ($vendor->status) {
+                'pending'   => 'Your shop is currently pending verification or review.',
+                'suspended' => 'Your shop has been suspended.',
+                'rejected'  => 'Your vendor application was rejected.',
+                default     => 'Your vendor account is not active.',
+            };
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+                'code'    => 'VENDOR_NOT_ACTIVE',
+                'data'    => [
+                    'status'           => $vendor->status,
+                    'rejection_reason' => $vendor->rejection_reason,
+                ],
+            ], 403);
         }
 
         return $next($request);

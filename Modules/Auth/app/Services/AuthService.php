@@ -170,8 +170,8 @@ class AuthService
 
         $vendor = $user->vendor;
 
-        if (!$vendor || $vendor->status !== 'active') {
-            abort(403, 'Your vendor account is not active or pending approval.');
+        if (!$vendor) {
+            abort(403, 'You do not have a registered vendor shop.');
         }
 
         $token = $user->createToken('vendor-api', ['vendor'])->plainTextToken;

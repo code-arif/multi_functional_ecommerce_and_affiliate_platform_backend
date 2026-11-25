@@ -42,10 +42,10 @@ class VendorPassLessAuthController extends Controller
             return $this->errorResponse('Your account has been suspended.', null, 403);
         }
 
-        // Check if vendor profile exists and is active
+        // Check if vendor profile exists (pending/suspended/rejected vendors see restricted status page)
         $vendor = $user->vendor;
-        if (! $vendor || $vendor->status !== 'active') {
-            return $this->errorResponse('Your vendor account is not active or pending approval.', null, 403);
+        if (! $vendor) {
+            return $this->errorResponse('You do not have a registered vendor shop.', null, 403);
         }
 
         try {
@@ -84,10 +84,10 @@ class VendorPassLessAuthController extends Controller
             return $this->errorResponse('Your account has been suspended.', null, 403);
         }
 
-        // Check if vendor profile exists and is active
+        // Check if vendor profile exists (pending/suspended/rejected vendors see restricted status page)
         $vendor = $user->vendor;
-        if (! $vendor || $vendor->status !== 'active') {
-            return $this->errorResponse('Your vendor account is not active or pending approval.', null, 403);
+        if (! $vendor) {
+            return $this->errorResponse('You do not have a registered vendor shop.', null, 403);
         }
 
         $result = $this->passwordlessAuth->verifyOtp(

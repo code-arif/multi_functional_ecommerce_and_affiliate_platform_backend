@@ -1,6 +1,7 @@
 <?php
 
 use Modules\Core\Http\Middleware\AdminMiddleware;
+use Modules\Core\Http\Middleware\VendorAuthMiddleware;
 use Modules\Core\Http\Middleware\VendorMiddleware;
 use Modules\Core\Http\Middleware\PermissionMiddleware;
 use Modules\Core\Http\Middleware\RoleMiddleware;
@@ -50,6 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth' => Authenticate::class,
             'admin' => AdminMiddleware::class,
             'vendor' => VendorMiddleware::class,
+            'vendor.auth' => VendorAuthMiddleware::class,
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'banned' => BannedUserMiddleware::class,
