@@ -278,13 +278,19 @@ class FinanceService
      */
     public function getAllPayouts(array $filters = [])
     {
-        $query = VendorPayoutRequest::with('vendor:id,shop_name');
+        $query = VendorPayoutRequest::with('vendor:id,uuid,shop_name,email,commission_rate,wallet_balance');
 
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
         if (!empty($filters['vendor_id'])) {
             $query->where('vendor_id', $filters['vendor_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+        if (!empty($filters['date_to'])) {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
         }
 
         return $query->latest()->paginate($filters['per_page'] ?? 20);

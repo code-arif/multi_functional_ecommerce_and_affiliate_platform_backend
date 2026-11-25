@@ -27,6 +27,8 @@ class VendorResource extends JsonResource
             'total_withdrawn'  => (float) $this->total_withdrawn,
             'is_active'        => $this->is_active,
             'is_pending'       => $this->is_pending,
+            'products_count'   => $this->when(isset($this->products_count), (int) $this->products_count),
+            'total_orders'     => $this->when(isset($this->total_orders), (int) $this->total_orders),
             'approved_at'      => $this->approved_at,
             'rejection_reason' => $this->rejection_reason,
             'profile'          => $this->whenLoaded('profile', fn() => VendorProfileResource::make($this->profile)),

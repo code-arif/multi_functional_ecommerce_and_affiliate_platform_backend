@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Modules\Vendor\Models\Vendor;
 use Modules\Vendor\Models\VendorDocument;
 use Modules\Vendor\Http\Requests\UpdateVendorStatusRequest;
+use Modules\Vendor\Transformers\AdminVendorDocumentResource;
 use Modules\Vendor\Transformers\AdminVendorListResource;
 use Modules\Vendor\Transformers\VendorResource;
 use Modules\Vendor\Transformers\VendorListResource;
@@ -23,6 +24,33 @@ class VendorManageController extends Controller
     public function __construct(
         private VendorManageService $vendorManageService
     ) {}
+
+    /**
+     * GET /api/v1/admin/vendors/stats
+     * Summary counts for admin vendors dashboard & sidebar badges
+     */
+    public function stats(): JsonResponse
+    {
+        $counts = Vendor::selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) as suspended,
+                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+            ")
+            ->first();
+
+        $pendingDocs = VendorDocument::where('status', 'pending')->count();
+
+        return $this->successResponse([
+            'total'             => (int) ($counts->total ?? 0),
+            'active'            => (int) ($counts->active ?? 0),
+            'pending'           => (int) ($counts->pending ?? 0),
+            'suspended'         => (int) ($counts->suspended ?? 0),
+            'rejected'          => (int) ($counts->rejected ?? 0),
+            'pending_documents' => $pendingDocs,
+        ]);
+    }
 
     /**
      * GET /api/v1/admin/vendors
@@ -51,7 +79,9 @@ class VendorManageController extends Controller
             ->withSum('orders', 'total_amount')
             ->when($request->status, fn($q, $s) => $q->where('status', $s))
             ->when($request->search, fn($q, $s) => $q->where('shop_name', 'like', "%{$s}%"))
-            ->latest()
+            ->when($request->date_from, fn($q, $d) => $q->whereDate('created_at', '>=', $d))
+            ->when($request->date_to, fn($q, $d) => $q->whereDate('created_at', '<=', $d))
+            ->when($request->sort === 'oldest', fn($q) => $q->oldest(), fn($q) => $request->sort === 'name' ? $q->orderBy('shop_name') : $q->latest())
             ->paginate($request->per_page ?? 20);
 
         return $this->paginatedResponse(AdminVendorListResource::collection($vendors));
@@ -78,6 +108,7 @@ class VendorManageController extends Controller
     public function show(string $uuid): JsonResponse
     {
         $vendor = Vendor::with(['user', 'profile', 'addresses', 'bankAccounts', 'documents', 'staff.user'])
+            ->withCount(['vendorProductPrices as products_count', 'orders as total_orders'])
             ->where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))
             ->firstOrFail();
         return $this->successResponse(new VendorResource($vendor));
@@ -142,9 +173,9 @@ class VendorManageController extends Controller
 
     /**
      * GET /api/v1/admin/vendors/pending
-     * Quick access to pending vendors
+     * Quick access to pending vendors (paginated)
      */
-    public function pending(): JsonResponse
+    public function pending(Request $request): JsonResponse
     {
         $vendors = Vendor::query()
             ->select([
@@ -160,11 +191,80 @@ class VendorManageController extends Controller
                 'created_at',
             ])
             ->with(['user:id,name'])
+            ->withCount([
+                'vendorProductPrices as products_count',
+                'orders',
+            ])
+            ->withSum('orders', 'total_amount')
             ->pending()
+            ->when($request->search, fn($q, $s) => $q->where('shop_name', 'like', "%{$s}%"))
             ->latest()
-            ->get();
+            ->paginate($request->per_page ?? 20);
 
-        return $this->successResponse(AdminVendorListResource::collection($vendors));
+        return $this->paginatedResponse(AdminVendorListResource::collection($vendors));
+    }
+
+    /**
+     * GET /api/v1/admin/vendors/documents
+     * Centralized KYC document verification queue across all vendors
+     */
+    public function documents(Request $request): JsonResponse
+    {
+        $docs = VendorDocument::query()
+            ->with(['vendor:id,uuid,shop_name,email,status'])
+            ->when($request->status, fn($q, $s) => $q->where('status', $s))
+            ->when($request->type, fn($q, $t) => $q->where('type', $t))
+            ->when($request->search, function ($q, $search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('document_number', 'like', "%{$search}%")
+                        ->orWhereHas('vendor', fn($vq) => $vq->where('shop_name', 'like', "%{$search}%"));
+                });
+            })
+            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 WHEN status = 'rejected' THEN 1 ELSE 2 END")
+            ->latest()
+            ->paginate($request->per_page ?? 20);
+
+        return $this->paginatedResponse(AdminVendorDocumentResource::collection($docs));
+    }
+
+    /**
+     * PUT /api/v1/admin/vendors/{uuid}/commission
+     * Update vendor commission rate & type
+     */
+    public function updateCommission(string $uuid, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'commission_rate' => 'required|numeric|min:0|max:100',
+            'commission_type' => 'required|in:percentage,fixed',
+        ]);
+
+        $vendor = Vendor::where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))->first();
+        if (!$vendor) {
+            return $this->notFoundResponse('Vendor not found.');
+        }
+
+        $vendor->update($validated);
+
+        return $this->successResponse(
+            new VendorResource($vendor->fresh()),
+            'Vendor commission updated successfully.'
+        );
+    }
+
+    /**
+     * DELETE /api/v1/admin/vendors/{uuid}
+     * Soft-delete a vendor
+     */
+    public function destroy(string $uuid): JsonResponse
+    {
+        $vendor = Vendor::where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))->first();
+        if (!$vendor) {
+            return $this->notFoundResponse('Vendor not found.');
+        }
+
+        $vendor->delete();
+
+        return $this->noContentResponse('Vendor deleted successfully.');
     }
 
     /**

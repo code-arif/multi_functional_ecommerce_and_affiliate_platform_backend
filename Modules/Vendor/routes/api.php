@@ -36,15 +36,20 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'admin', 'banned'])->prefix('admin')->group(function () {
         Route::prefix('vendors')->middleware('permission:vendors.view')->group(function () {
             Route::get('/', [VendorManageController::class, 'index']); // DONE: list vendors for admin
+            Route::get('stats', [VendorManageController::class, 'stats']);
+            Route::get('pending', [VendorManageController::class, 'pending']);
+            Route::get('documents', [VendorManageController::class, 'documents']);
             // Route::post('/', [VendorManageController::class, 'store'])->middleware('permission:vendors.create'); // DONE: create vendor
             Route::post('/store', [VendorManageController::class, 'store'])->middleware('permission:vendors.create'); // DONE: create vendor
             Route::get('{uuid}', [VendorManageController::class, 'show']); // DONE: Vendor details
-            Route::post('{uuid}/approve', [VendorManageController::class, 'approve'])->middleware('permission:vendors.approve');
-            Route::post('{uuid}/reject', [VendorManageController::class, 'reject'])->middleware('permission:vendors.approve');
-            Route::post('{uuid}/suspend', [VendorManageController::class, 'suspend'])->middleware('permission:vendors.manage');
-            Route::post('{uuid}/pending', [VendorManageController::class, 'makePending'])->middleware('permission:vendors.manage');
-            Route::post('documents/{document}/verify', [VendorManageController::class, 'verifyDocument'])->middleware('permission:vendors.manage');
-            Route::post('documents/{document}/reject', [VendorManageController::class, 'rejectDocument'])->middleware('permission:vendors.manage');
+            Route::delete('{uuid}', [VendorManageController::class, 'destroy'])->middleware('permission:vendors.manage');
+            Route::put('{uuid}/commission', [VendorManageController::class, 'updateCommission'])->middleware('permission:vendors.manage');
+            Route::post('{uuid}/approve', [VendorManageController::class, 'approve'])->middleware('permission:vendors.approve'); // DONE: approve vendor
+            Route::post('{uuid}/reject', [VendorManageController::class, 'reject'])->middleware('permission:vendors.approve'); // DONE: reject vendor
+            Route::post('{uuid}/suspend', [VendorManageController::class, 'suspend'])->middleware('permission:vendors.manage'); // DONE: suspend vendor
+            Route::post('{uuid}/pending', [VendorManageController::class, 'makePending'])->middleware('permission:vendors.manage'); // DONE: make pending vendor
+            Route::post('documents/{document}/verify', [VendorManageController::class, 'verifyDocument'])->middleware('permission:vendors.manage'); // DONE: verify vendor document
+            Route::post('documents/{document}/reject', [VendorManageController::class, 'rejectDocument'])->middleware('permission:vendors.manage'); // DONE: reject vendor document
         });
     });
 });

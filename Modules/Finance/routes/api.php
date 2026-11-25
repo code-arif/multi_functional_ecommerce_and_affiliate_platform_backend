@@ -37,6 +37,8 @@ Route::middleware(['auth:sanctum', 'admin', 'banned'])
             // Payouts
             Route::get('payouts',                    [AdminFinanceController::class, 'payouts'])
                 ->middleware('permission:finance.view');
+            Route::get('payouts/summary',            [AdminFinanceController::class, 'payoutSummary'])
+                ->middleware('permission:finance.view');
             Route::post('payouts/{payout}/approve',    [AdminFinanceController::class, 'approvePayout'])
                 ->middleware('permission:finance.manage');
             Route::post('payouts/{payout}/reject',     [AdminFinanceController::class, 'rejectPayout'])
