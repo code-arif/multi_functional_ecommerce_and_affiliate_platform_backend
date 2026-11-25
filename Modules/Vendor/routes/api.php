@@ -36,17 +36,17 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'admin', 'banned'])->prefix('admin')->group(function () {
         Route::prefix('vendors')->middleware('permission:vendors.view')->group(function () {
             Route::get('/', [VendorManageController::class, 'index']); // DONE: list vendors for admin
-            Route::get('stats', [VendorManageController::class, 'stats']);
-            Route::get('pending', [VendorManageController::class, 'pending']);
+            Route::get('stats', [VendorManageController::class, 'stats']); // DONE: vendor stats
+            Route::get('pending', [VendorManageController::class, 'pending']); // DONE: pending vendors
             Route::get('trashed', [VendorManageController::class, 'trashed']); // DONE: trashed vendors
-            Route::get('documents', [VendorManageController::class, 'documents']);
+            Route::get('documents', [VendorManageController::class, 'documents']); // DONE: vendor documents
             // Route::post('/', [VendorManageController::class, 'store'])->middleware('permission:vendors.create'); // DONE: create vendor
             Route::post('/store', [VendorManageController::class, 'store'])->middleware('permission:vendors.create'); // DONE: create vendor
             Route::get('{uuid}', [VendorManageController::class, 'show']); // DONE: Vendor details
             Route::delete('{uuid}', [VendorManageController::class, 'destroy'])->middleware('permission:vendors.manage'); // DONE: vendor delete
             Route::post('{uuid}/restore', [VendorManageController::class, 'restore'])->middleware('permission:vendors.manage'); // DONE: vendor restore
             Route::delete('{uuid}/force', [VendorManageController::class, 'forceDelete'])->middleware('permission:vendors.manage'); // DONE: vendor force delete
-            Route::put('{uuid}/commission', [VendorManageController::class, 'updateCommission'])->middleware('permission:vendors.manage');
+            Route::put('{uuid}/commission', [VendorManageController::class, 'updateCommission'])->middleware('permission:vendors.manage'); // DONE: vendor commission update
             Route::post('{uuid}/approve', [VendorManageController::class, 'approve'])->middleware('permission:vendors.approve'); // DONE: approve vendor
             Route::post('{uuid}/reject', [VendorManageController::class, 'reject'])->middleware('permission:vendors.approve'); // DONE: reject vendor
             Route::post('{uuid}/suspend', [VendorManageController::class, 'suspend'])->middleware('permission:vendors.manage'); // DONE: suspend vendor
