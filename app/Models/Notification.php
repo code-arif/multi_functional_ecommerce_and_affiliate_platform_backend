@@ -2,9 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Modules\Notifications\Models\Notification as BaseNotification;
 
-class Notification extends Model
+class Notification extends BaseNotification
 {
-    //
 }

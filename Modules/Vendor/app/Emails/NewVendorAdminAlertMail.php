@@ -14,6 +14,9 @@ class NewVendorAdminAlertMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
+    public int $tries = 3;
+    public int $backoff = 3;
+
     public function __construct(
         public Vendor $vendor
     ) {}

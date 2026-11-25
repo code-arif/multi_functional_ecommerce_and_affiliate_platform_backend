@@ -21,6 +21,9 @@ class SendVendorWelcomeEmail implements ShouldQueue
 
     public function handle(): void
     {
-        Mail::to($this->vendor->email)->send(new VendorWelcomeMail($this->vendor));
+        $email = $this->vendor->email ?: $this->vendor->user?->email;
+        if ($email) {
+            Mail::to($email)->send(new VendorWelcomeMail($this->vendor));
+        }
     }
 }

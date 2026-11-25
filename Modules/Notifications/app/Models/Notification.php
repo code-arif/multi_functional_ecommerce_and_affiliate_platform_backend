@@ -13,11 +13,12 @@ use Illuminate\Support\Str;
 class Notification extends Model
 {
     protected $table = 'notifications';
-    public $timestamps = false;
+    public $timestamps = true;
     public $incrementing = false;
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'type',
         'notifiable_type',
         'notifiable_id',

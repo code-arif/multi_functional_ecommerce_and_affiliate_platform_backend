@@ -37,23 +37,6 @@ Route::middleware(['auth:sanctum', 'banned'])->group(function () {
     Route::get('chat/room/{room}/messages',   [ChatController::class, 'messages']);
     Route::post('chat/room/{room}/messages',  [ChatController::class, 'sendMessage'])
         ->middleware('throttle:30,1');
-
-    // Notifications
-    Route::get('notifications', function (\Illuminate\Http\Request $req) {
-        return response()->json([
-            'success' => true,
-            'data'    => $req->user()->notifications()->latest()->paginate(20),
-            'unread'  => $req->user()->unreadNotifications()->count(),
-        ]);
-    });
-    Route::post('notifications/{id}/read', function ($id, \Illuminate\Http\Request $req) {
-        $req->user()->notifications()->where('id', $id)->update(['read_at' => now()]);
-        return response()->json(['success' => true, 'message' => 'Marked as read.']);
-    });
-    Route::post('notifications/read-all', function (\Illuminate\Http\Request $req) {
-        $req->user()->unreadNotifications->markAsRead();
-        return response()->json(['success' => true, 'message' => 'All notifications marked as read.']);
-    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
