@@ -2,7 +2,12 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Vendor\Http\Controllers\Admin\VendorManageController;
+use Modules\Vendor\Http\Controllers\VendorAddressController;
+use Modules\Vendor\Http\Controllers\VendorBankAccountController;
 use Modules\Vendor\Http\Controllers\VendorController;
+use Modules\Vendor\Http\Controllers\VendorDashboardController;
+use Modules\Vendor\Http\Controllers\VendorSettingsController;
+use Modules\Vendor\Http\Controllers\VendorStaffController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,10 +31,35 @@ Route::prefix('v1')->group(function () {
 
     // Authenticated Vendor Management (Scoped to Active Vendor)
     Route::middleware(['auth:sanctum', 'vendor', 'banned'])->prefix('vendor')->group(function () {
-        Route::get('profile', [VendorController::class, 'profile']);
-        Route::put('profile', [VendorController::class, 'updateProfile']);
-        Route::post('documents', [VendorController::class, 'uploadDocument']);
-        Route::get('documents', [VendorController::class, 'documents']);
+        Route::get('dashboard', [VendorDashboardController::class, 'index']); // DONE: vendor dashboard stats
+
+        Route::get('profile', [VendorController::class, 'profile']); // DONE: get vendor profile
+        Route::put('profile', [VendorController::class, 'updateProfile']); // DONE: update shop profile
+
+        Route::get('documents', [VendorController::class, 'documents']); // DONE: list KYC documents
+        Route::post('documents', [VendorController::class, 'uploadDocument']); // DONE: upload KYC document
+        Route::delete('documents/{document}', [VendorController::class, 'destroyDocument']); // DONE: delete KYC document
+
+        Route::get('settings', [VendorSettingsController::class, 'index']); // DONE: get vendor settings
+        Route::post('settings', [VendorSettingsController::class, 'update']); // DONE: update vendor settings
+
+        Route::get('bank-accounts', [VendorBankAccountController::class, 'index']); // DONE: list payout accounts
+        Route::post('bank-accounts', [VendorBankAccountController::class, 'store']); // DONE: add payout account
+        Route::put('bank-accounts/{bankAccount}', [VendorBankAccountController::class, 'update']); // DONE: update payout account
+        Route::post('bank-accounts/{bankAccount}/default', [VendorBankAccountController::class, 'setDefault']); // DONE: set default payout account
+        Route::delete('bank-accounts/{bankAccount}', [VendorBankAccountController::class, 'destroy']); // DONE: delete payout account
+
+        Route::get('addresses', [VendorAddressController::class, 'index']); // DONE: list shop addresses
+        Route::post('addresses', [VendorAddressController::class, 'store']); // DONE: add shop address
+        Route::put('addresses/{address}', [VendorAddressController::class, 'update']); // DONE: update shop address
+        Route::post('addresses/{address}/default', [VendorAddressController::class, 'setDefault']); // DONE: set default shop address
+        Route::delete('addresses/{address}', [VendorAddressController::class, 'destroy']); // DONE: delete shop address
+
+        Route::get('staff', [VendorStaffController::class, 'index']); // DONE: list shop staff
+        Route::post('staff', [VendorStaffController::class, 'store']); // DONE: invite/add shop staff
+        Route::put('staff/{staff}', [VendorStaffController::class, 'update']); // DONE: update staff role
+        Route::post('staff/{staff}/toggle-status', [VendorStaffController::class, 'toggleStatus']); // DONE: toggle staff status
+        Route::delete('staff/{staff}', [VendorStaffController::class, 'destroy']); // DONE: remove shop staff
     });
 
     // Admin-Facing Vendor Moderation & Management

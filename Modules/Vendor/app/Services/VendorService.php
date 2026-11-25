@@ -4,11 +4,14 @@ namespace Modules\Vendor\Services;
 
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\Vendor\Events\VendorRegisteredEvent;
 use Modules\Vendor\Models\Vendor;
 use Modules\Vendor\Models\VendorDocument;
+use Modules\Vendor\Models\VendorStaff;
 
 class VendorService
 {
@@ -100,20 +103,24 @@ class VendorService
             $data['banner'] = $banner->store('vendors/banners', 'public');
         }
 
-        $vendor->update(array_filter([
-            'shop_name'   => $data['shop_name'] ?? null,
-            'email'       => $data['email'] ?? null,
-            'phone'       => $data['phone'] ?? null,
-            'description' => $data['description'] ?? null,
-            'logo'        => $data['logo'] ?? null,
-            'banner'      => $data['banner'] ?? null,
-        ]));
+        $vendorUpdates = Arr::only($data, ['shop_name', 'email', 'phone', 'description', 'logo', 'banner']);
+        if (array_key_exists('shop_name', $vendorUpdates) && empty($vendorUpdates['shop_name'])) {
+            unset($vendorUpdates['shop_name']);
+        }
+        if (!empty($vendorUpdates)) {
+            $vendor->update($vendorUpdates);
+        }
 
-        $profileFields = array_filter([
-            'business_type'   => $data['business_type'] ?? null,
-            'website'         => $data['website'] ?? null,
-            'return_policy'   => $data['return_policy'] ?? null,
-            'shipping_policy' => $data['shipping_policy'] ?? null,
+        $profileFields = Arr::only($data, [
+            'business_type',
+            'business_registration_number',
+            'tax_id',
+            'website',
+            'social_facebook',
+            'social_instagram',
+            'social_youtube',
+            'return_policy',
+            'shipping_policy',
         ]);
 
         if (!empty($profileFields)) {
@@ -123,7 +130,7 @@ class VendorService
             );
         }
 
-        return $vendor->fresh(['profile', 'addresses']);
+        return $vendor->fresh(['profile', 'addresses', 'bankAccounts', 'documents']);
     }
 
     /**
@@ -139,6 +146,38 @@ class VendorService
             'document_number' => $data['document_number'] ?? null,
             'expiry_date'     => $data['expiry_date'] ?? null,
             'status'          => 'pending',
+        ]);
+    }
+
+    /**
+     * Delete a pending or rejected KYC document.
+     */
+    public function deleteDocument(VendorDocument $document): void
+    {
+        if ($document->document_path && Storage::disk('public')->exists($document->document_path)) {
+            Storage::disk('public')->delete($document->document_path);
+        }
+
+        $document->delete();
+    }
+
+    /**
+     * Add a staff member to a vendor shop with role-based default permissions.
+     */
+    public function addStaff(Vendor $vendor, User $user, string $role, ?array $permissions = null): VendorStaff
+    {
+        $defaultPermissions = match ($role) {
+            'manager'         => ['products.*', 'orders.*', 'inventory.*', 'reviews.reply', 'coupons.*'],
+            'product_manager' => ['products.*', 'inventory.*'],
+            'order_processor' => ['orders.*', 'shipping.*'],
+            default           => ['orders.view', 'products.view'],
+        };
+
+        return $vendor->staff()->create([
+            'user_id'     => $user->id,
+            'role'        => $role,
+            'permissions' => $permissions ?? $defaultPermissions,
+            'is_active'   => true,
         ]);
     }
 

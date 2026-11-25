@@ -10,6 +10,7 @@ use Modules\Vendor\Http\Requests\ApplyVendorRequest;
 use Modules\Vendor\Http\Requests\UpdateVendorRequest;
 use Modules\Vendor\Http\Requests\UploadDocumentRequest;
 use Modules\Vendor\Models\Vendor;
+use Modules\Vendor\Models\VendorDocument;
 use Modules\Vendor\Services\VendorService;
 use Modules\Vendor\Transformers\VendorDocumentResource;
 use Modules\Vendor\Transformers\VendorListResource;
@@ -124,6 +125,27 @@ class VendorController
         return $this->successResponse(
             VendorDocumentResource::collection($docs)
         );
+    }
+
+    /**
+     * DELETE /api/v1/vendor/documents/{document}
+     * Delete a pending or rejected KYC document.
+     */
+    public function destroyDocument(Request $request, VendorDocument $document): JsonResponse
+    {
+        $vendor = $request->user()->vendor;
+
+        if (!$vendor || $document->vendor_id !== $vendor->id) {
+            return $this->notFoundResponse('Document not found.');
+        }
+
+        if ($document->status === 'verified') {
+            return $this->errorResponse('Verified documents cannot be deleted.', null, 422);
+        }
+
+        $this->vendorService->deleteDocument($document);
+
+        return $this->successResponse(null, 'Document deleted successfully.');
     }
 
     /**
