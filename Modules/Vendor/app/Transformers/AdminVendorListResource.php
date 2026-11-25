@@ -22,6 +22,7 @@ class AdminVendorListResource extends JsonResource
             'rating'         => (float) ($this->rating ?? 0),
             'reviews_count'  => (int) ($this->reviews_count ?? 0),
             'created_at'     => $this->created_at,
+            'deleted_at'     => $this->whenNotNull($this->deleted_at),
         ];
     }
 }

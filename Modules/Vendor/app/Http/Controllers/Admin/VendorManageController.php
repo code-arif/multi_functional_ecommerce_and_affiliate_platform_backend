@@ -41,6 +41,7 @@ class VendorManageController extends Controller
             ->first();
 
         $pendingDocs = VendorDocument::where('status', 'pending')->count();
+        $trashedCount = Vendor::onlyTrashed()->count();
 
         return $this->successResponse([
             'total'             => (int) ($counts->total ?? 0),
@@ -49,6 +50,7 @@ class VendorManageController extends Controller
             'suspended'         => (int) ($counts->suspended ?? 0),
             'rejected'          => (int) ($counts->rejected ?? 0),
             'pending_documents' => $pendingDocs,
+            'trashed'           => $trashedCount,
         ]);
     }
 
@@ -264,7 +266,86 @@ class VendorManageController extends Controller
 
         $vendor->delete();
 
-        return $this->noContentResponse('Vendor deleted successfully.');
+        return $this->noContentResponse('Vendor moved to trash successfully.');
+    }
+
+    /**
+     * GET /api/v1/admin/vendors/trashed
+     * List soft-deleted vendors
+     */
+    public function trashed(Request $request): JsonResponse
+    {
+        $vendors = Vendor::onlyTrashed()
+            ->select([
+                'id',
+                'uuid',
+                'user_id',
+                'shop_name',
+                'email',
+                'phone',
+                'logo',
+                'status',
+                'total_earned',
+                'created_at',
+                'deleted_at',
+            ])
+            ->with(['user:id,name'])
+            ->withCount([
+                'vendorProductPrices as products_count',
+                'orders',
+            ])
+            ->withSum('orders', 'total_amount')
+            ->when($request->search, function ($q, $search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('shop_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->latest('deleted_at')
+            ->paginate($request->per_page ?? 20);
+
+        return $this->paginatedResponse(AdminVendorListResource::collection($vendors));
+    }
+
+    /**
+     * POST /api/v1/admin/vendors/{uuid}/restore
+     * Restore a soft-deleted vendor
+     */
+    public function restore(string $uuid): JsonResponse
+    {
+        $vendor = Vendor::onlyTrashed()
+            ->where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))
+            ->first();
+
+        if (!$vendor) {
+            return $this->notFoundResponse('Deleted vendor not found.');
+        }
+
+        $vendor->restore();
+
+        return $this->successResponse(
+            new VendorResource($vendor->fresh()),
+            'Vendor restored successfully.'
+        );
+    }
+
+    /**
+     * DELETE /api/v1/admin/vendors/{uuid}/force
+     * Permanently delete a soft-deleted vendor
+     */
+    public function forceDelete(string $uuid): JsonResponse
+    {
+        $vendor = Vendor::onlyTrashed()
+            ->where(fn($q) => $q->where('uuid', $uuid)->orWhere('id', $uuid))
+            ->first();
+
+        if (!$vendor) {
+            return $this->notFoundResponse('Deleted vendor not found.');
+        }
+
+        $vendor->forceDelete();
+
+        return $this->noContentResponse('Vendor permanently deleted.');
     }
 
     /**
