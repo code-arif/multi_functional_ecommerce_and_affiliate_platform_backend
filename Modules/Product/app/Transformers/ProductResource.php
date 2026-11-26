@@ -50,11 +50,13 @@ class ProductResource extends JsonResource
             // Relationships
             'category'  => $this->whenLoaded('category', fn() => [
                 'id'   => $this->category->id,
+                'uuid' => $this->category->uuid,
                 'name' => $this->category->name,
                 'slug' => $this->category->slug,
             ]),
             'brand'     => $this->whenLoaded('brand', fn() => [
                 'id'       => $this->brand->id,
+                'uuid'     => $this->brand->uuid,
                 'name'     => $this->brand->name,
                 'slug'     => $this->brand->slug,
                 'logo_url' => $this->brand->logo_url,

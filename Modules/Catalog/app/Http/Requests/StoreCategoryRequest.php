@@ -40,7 +40,7 @@ class StoreCategoryRequest extends FormRequest
     {
         return [
             'name.required' => 'Category name is required.',
-            'parent_id.exists' => 'The selected parent category does not exist.',
+            'parent_uuid.exists' => 'The selected parent category does not exist.',
         ];
     }
 }

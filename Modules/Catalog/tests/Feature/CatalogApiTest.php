@@ -6,7 +6,10 @@ use Tests\TestCase;
 use App\Models\User;
 use Modules\Catalog\Models\Category;
 use Modules\Catalog\Models\Brand;
-use Modules\Product\Models\Product;;
+use Modules\Notifications\Notifications\CategoryProposedNotification;
+use Modules\Notifications\Notifications\CategoryStatusNotification;
+use Modules\Product\Models\Product;
+use Modules\RBAC\Database\Seeders\RBACSeeder;
 use Modules\Vendor\Models\Vendor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -245,5 +248,161 @@ class CatalogApiTest extends TestCase
         $pendingProduct->reject();
 
         $this->assertEquals('inactive', $pendingProduct->fresh()->status);
+    }
+
+    // ─── Admin & Vendor Catalog Management ────────────────────────
+
+    /** @test */
+    public function admin_can_crud_categories_and_brands_by_uuid(): void
+    {
+        $this->seed(RBACSeeder::class);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('admin');
+
+        $catCreate = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/categories/store', [
+                'name'            => 'Gaming Accessories',
+                'commission_rate' => 12.5,
+                'status'          => 'approved',
+                'is_active'       => true,
+                'meta_keywords'   => 'gaming,accessories',
+            ]);
+
+        $catCreate->assertStatus(201)
+            ->assertJsonPath('data.name', 'Gaming Accessories')
+            ->assertJsonPath('data.meta_keywords', 'gaming,accessories');
+
+        $catUuid = $catCreate->json('data.uuid');
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/v1/admin/categories/{$catUuid}")
+            ->assertOk()
+            ->assertJsonPath('data.uuid', $catUuid);
+
+        $this->actingAs($admin, 'sanctum')
+            ->putJson("/api/v1/admin/categories/{$catUuid}/update", [
+                'name' => 'PC Gaming Gear',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'PC Gaming Gear');
+
+        $brandCreate = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/brands/store', [
+                'name'      => 'HyperGear',
+                'status'    => 'approved',
+                'is_active' => true,
+            ]);
+
+        $brandCreate->assertStatus(201)
+            ->assertJsonStructure(['data' => ['id', 'uuid', 'name']]);
+
+        $brandUuid = $brandCreate->json('data.uuid');
+
+        $this->actingAs($admin, 'sanctum')
+            ->putJson("/api/v1/admin/brands/{$brandUuid}/update", [
+                'name' => 'HyperGear Pro',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'HyperGear Pro');
+
+        $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/v1/admin/brands/{$brandUuid}/delete")
+            ->assertOk();
+
+        $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/v1/admin/categories/{$catUuid}/delete")
+            ->assertOk();
+    }
+
+    /** @test */
+    public function active_vendor_can_list_catalog_and_submit_pending_proposals(): void
+    {
+        $this->seed(RBACSeeder::class);
+
+        $vendorUser = User::factory()->create(['status' => 'active']);
+        $vendorUser->assignRole('vendor');
+        Vendor::factory()->create([
+            'user_id'   => $vendorUser->id,
+            'shop_name' => 'Vendor Catalog Shop',
+            'slug'      => 'vendor-catalog-shop',
+            'status'    => 'active',
+        ]);
+
+        $this->actingAs($vendorUser, 'sanctum')
+            ->getJson('/api/v1/vendor/categories')
+            ->assertOk();
+
+        $this->actingAs($vendorUser, 'sanctum')
+            ->getJson('/api/v1/vendor/brands')
+            ->assertOk();
+
+        $this->actingAs($vendorUser, 'sanctum')
+            ->postJson('/api/v1/vendor/categories/store', [
+                'name'   => 'Vendor Proposed Category',
+                'status' => 'approved',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->actingAs($vendorUser, 'sanctum')
+            ->postJson('/api/v1/vendor/brands/store', [
+                'name'   => 'Vendor Proposed Brand',
+                'status' => 'approved',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.status', 'pending');
+    }
+
+    /** @test */
+    public function vendor_category_proposal_and_admin_approve_reject_send_notifications(): void
+    {
+        $this->seed(RBACSeeder::class);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('admin');
+
+        $vendorUser = User::factory()->create(['status' => 'active']);
+        $vendorUser->assignRole('vendor');
+        Vendor::factory()->create([
+            'user_id'   => $vendorUser->id,
+            'shop_name' => 'Notified Shop',
+            'slug'      => 'notified-shop',
+            'status'    => 'active',
+        ]);
+
+        $proposal = $this->actingAs($vendorUser, 'sanctum')
+            ->postJson('/api/v1/vendor/categories/store', [
+                'name' => 'Proposed Audio Gear',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.status', 'pending');
+
+        $categoryUuid = $proposal->json('data.uuid');
+
+        $this->assertEquals(1, $admin->notifications()->where('type', CategoryProposedNotification::class)->count());
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/v1/admin/categories/{$categoryUuid}")
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['created_at', 'updated_at', 'products']]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/admin/categories/{$categoryUuid}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->assertEquals(1, $vendorUser->notifications()->where('type', CategoryStatusNotification::class)->count());
+        $this->assertEquals('approved', $vendorUser->notifications()->latest()->first()->data['status']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/admin/categories/{$categoryUuid}/reject", [
+                'reason' => 'Duplicate category',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'rejected');
+
+        $this->assertEquals(2, $vendorUser->notifications()->where('type', CategoryStatusNotification::class)->count());
+        $this->assertEquals('rejected', $vendorUser->notifications()->latest()->first()->data['status']);
     }
 }

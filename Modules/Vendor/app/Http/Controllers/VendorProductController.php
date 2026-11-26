@@ -2,11 +2,12 @@
 
 namespace Modules\Vendor\Http\Controllers;
 
-use \Modules\Catalog\Models\Category;
+use Modules\Catalog\Models\Brand;
+use Modules\Catalog\Models\Category;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Core\Traits\ApiResponse;
-use Modules\Product\Models\Product;;
+use Modules\Product\Models\Product;
 use Modules\Product\Models\VendorProductPrice;
 use Modules\Product\Services\ProductService;
 use Modules\Product\Transformers\ProductListResource;
@@ -72,6 +73,7 @@ class VendorProductController
             'sale_price'  => 'nullable|numeric|min:0|lte:price',
             'stock_quantity' => 'nullable|integer|min:0',
             'category_uuid' => 'nullable|exists:categories,uuid',
+            'brand_uuid'    => 'nullable|exists:brands,uuid',
             'short_description' => 'nullable|string',
             'description' => 'nullable|string',
             'thumbnail'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -86,6 +88,11 @@ class VendorProductController
             $validated['category_id'] = Category::findByUuidOrFail($validated['category_uuid'])->id;
         }
         unset($validated['category_uuid']);
+
+        if (!empty($validated['brand_uuid'])) {
+            $validated['brand_id'] = Brand::findByUuidOrFail($validated['brand_uuid'])->id;
+        }
+        unset($validated['brand_uuid']);
 
         // If linking to an existing product
         if (!empty($validated['product_uuid'])) {

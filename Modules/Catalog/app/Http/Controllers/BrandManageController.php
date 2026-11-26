@@ -19,6 +19,8 @@ class BrandManageController
     {
         $brands = Brand::withCount('products')
             ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"))
+            ->when($request->status, fn($q) => $q->where('status', $request->status))
+            ->when($request->filled('is_active'), fn($q) => $q->where('is_active', $request->boolean('is_active')))
             ->orderBy('name')
             ->paginate($request->per_page ?? 50);
 

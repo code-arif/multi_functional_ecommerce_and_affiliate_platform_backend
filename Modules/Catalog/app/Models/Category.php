@@ -2,12 +2,14 @@
 
 namespace Modules\Catalog\Models;
 
-use Modules\Catalog\Traits\HasSlug;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Modules\Catalog\Traits\HasSlug;
 use Modules\Core\Traits\HasUuid;
+use Modules\Product\Models\Product;
 
 class Category extends Model
 {
@@ -56,8 +58,15 @@ class Category extends Model
             }
 
             // Set created_by if auth user is logged in and not already set
-            if (auth()->check() && !$category->created_by) {
-                $category->created_by = auth()->id();
+            if (auth()->check()) {
+                if (!$category->created_by) {
+                    $category->created_by = auth()->id();
+                }
+
+                // If not admin/moderator, force proposal status to pending
+                if (!auth()->user()->isAdmin() && !auth()->user()->isModerator()) {
+                    $category->status = 'pending';
+                }
             }
         });
 
@@ -100,12 +109,12 @@ class Category extends Model
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\User::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function updater(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\User::class, 'updated_by');
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     public function scopeActive($query)
