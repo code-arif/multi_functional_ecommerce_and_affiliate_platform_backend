@@ -7,6 +7,11 @@ use Modules\Reviews\Models\Review;
 
 class ReviewPolicy
 {
+    public function viewAny(User $user): bool
+    {
+        return $user->isAdmin() || $user->hasPermissionTo('reviews.view');
+    }
+
     public function create(User $user): bool
     {
         return true; // Any authenticated user can create a review
@@ -20,6 +25,11 @@ class ReviewPolicy
     public function delete(User $user, Review $review): bool
     {
         return $user->id === $review->user_id || $user->hasPermission('reviews.moderate');
+    }
+
+    public function moderate(User $user, Review $review): bool
+    {
+        return $user->isAdmin() || $user->hasPermissionTo('reviews.moderate');
     }
 
     public function approve(User $user): bool

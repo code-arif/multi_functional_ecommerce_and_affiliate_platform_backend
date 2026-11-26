@@ -10,7 +10,7 @@ class SeoService
 {
     public function getHomepageMeta(): array
     {
-        $settings = app()->make(\Modules\AdminPanel\Models\Setting::class);
+        $settings = app()->make(\Modules\Core\Models\Setting::class);
 
         return [
             'title'       => $settings::getValue('seo_home_title', config('app.name')),

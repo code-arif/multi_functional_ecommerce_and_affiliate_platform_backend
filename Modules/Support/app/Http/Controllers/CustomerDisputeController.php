@@ -2,8 +2,8 @@
 
 namespace Modules\Support\Http\Controllers;
 
-use Modules\AdminPanel\Models\Dispute;
-use Modules\AdminPanel\Http\Resources\DisputeResource;
+use Modules\Support\Models\Dispute;
+use Modules\Support\Http\Resources\DisputeResource;
 use Modules\Support\Http\Requests\StoreDisputeRequest;
 use Modules\Orders\Models\Order;
 use Modules\Core\Traits\ApiResponse;

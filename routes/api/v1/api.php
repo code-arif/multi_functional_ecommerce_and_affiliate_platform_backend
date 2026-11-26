@@ -2,23 +2,21 @@
 
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
-use Modules\AdminPanel\Http\Controllers\AffiliateProductController as AdminAffiliateProductController;
-use Modules\AdminPanel\Http\Controllers\BannerController as AdminBannerController;
-use Modules\AdminPanel\Http\Controllers\CmsPageController as AdminCmsPageController;
-use Modules\AdminPanel\Http\Controllers\CouponController as AdminCouponController;
-use Modules\AdminPanel\Http\Controllers\DashboardController as AdminDashboardController;
-use Modules\AdminPanel\Http\Controllers\DisputeController as AdminDisputeController;
-use Modules\AdminPanel\Http\Controllers\ProductController as AdminProductController;
-use Modules\AdminPanel\Http\Controllers\ReportController as AdminReportController;
-use Modules\AdminPanel\Http\Controllers\ReviewController as AdminReviewController;
-use Modules\AdminPanel\Http\Controllers\SettingController as AdminSettingController;
-use Modules\AdminPanel\Http\Controllers\UserController as AdminUserController;
 use Modules\Affiliate\Http\Controllers\AdminAffiliateController;
+use Modules\Affiliate\Http\Controllers\AdminAffiliateProductController;
 use Modules\Cart\Http\Controllers\WishlistController;
 use Modules\Cms\Http\Controllers\AdminCmsBlockController;
 use Modules\Cms\Http\Controllers\AdminCmsMenuController;
+use Modules\Cms\Http\Controllers\AdminCmsPageController;
+use Modules\Core\Http\Controllers\DashboardController as AdminDashboardController;
+use Modules\Core\Http\Controllers\ReportController as AdminReportController;
+use Modules\Core\Http\Controllers\SettingController as AdminSettingController;
+use Modules\Promotions\Http\Controllers\AdminBannerController;
+use Modules\Promotions\Http\Controllers\AdminCouponController;
 use Modules\Promotions\Http\Controllers\AdminPromotionController;
+use Modules\Reviews\Http\Controllers\AdminReviewController;
 use Modules\Support\Http\Controllers\ChatController;
+use Modules\Support\Http\Controllers\DisputeController as AdminDisputeController;
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,10 +104,7 @@ Route::middleware(['auth:sanctum', 'admin', 'banned'])->prefix('admin')->group(f
         Route::post('settings',             [AdminSettingController::class, 'update'])->middleware('permission:settings.manage');
         Route::post('settings/upload',      [AdminSettingController::class, 'uploadFile'])->middleware('permission:settings.manage');
 
-        // Users
-        Route::get('users',                 [AdminUserController::class, 'index'])->middleware('permission:users.view');
-        Route::get('users/{user}',          [AdminUserController::class, 'show'])->middleware('permission:users.view');
-        Route::patch('users/{user}/status', [AdminUserController::class, 'updateStatus'])->middleware('permission:users.ban');
+        // Customer / User routes are owned by Modules/Customer/routes/api.php
 
         // Disputes
         Route::prefix('disputes')->middleware('permission:orders.manage')->group(function () {

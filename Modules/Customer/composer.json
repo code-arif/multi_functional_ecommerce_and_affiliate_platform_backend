@@ -1,0 +1,23 @@
+{
+    "name": "nwidart/customer",
+    "description": "Customer management module",
+    "authors": [
+        {
+            "name": "Zenvex",
+            "email": "dev@zenvex.local"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Customer\\": "app/",
+            "Modules\\Customer\\Database\\Factories\\": "database/factories/",
+            "Modules\\Customer\\Database\\Seeders\\": "database/seeders/"
+        }
+    }
+}

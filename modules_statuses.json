@@ -1,5 +1,4 @@
 {
-    "AdminPanel": true,
     "Affiliate": true,
     "Auth": true,
     "Cart": true,
@@ -7,6 +6,7 @@
     "Checkout": true,
     "Cms": true,
     "Core": true,
+    "Customer": true,
     "Finance": true,
     "Inventory": true,
     "Notifications": true,

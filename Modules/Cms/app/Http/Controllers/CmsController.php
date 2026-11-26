@@ -9,7 +9,7 @@ use Modules\Cms\Http\Resources\CmsPageResource;
 use Modules\Cms\Http\Resources\CmsBlockResource;
 use Modules\Cms\Http\Resources\CmsMenuResource;
 use Modules\Promotions\Models\Banner;
-use Modules\AdminPanel\Models\Setting;
+use Modules\Core\Models\Setting;
 use Modules\Core\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

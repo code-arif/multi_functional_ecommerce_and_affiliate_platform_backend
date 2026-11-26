@@ -51,9 +51,9 @@
             "Modules\\Search\\": "Modules/Search/app/",
             "Modules\\Notifications\\": "Modules/Notifications/app/",
             "Modules\\Support\\": "Modules/Support/app/",
-            "Modules\\AdminPanel\\": "Modules/AdminPanel/app/",
             "Modules\\Affiliate\\": "Modules/Affiliate/app/",
             "Modules\\Cms\\": "Modules/Cms/app/",
+            "Modules\\Customer\\": "Modules/Customer/app/",
             "Modules\\Vendor\\": "Modules/Vendor/app/",
             "Modules\\Product\\": "Modules/Product/app/"
         }
@@ -61,7 +61,6 @@
     "autoload-dev": {
         "psr-4": {
             "Tests\\": "tests/",
-            "Modules\\AdminPanel\\Tests\\": "Modules/AdminPanel/tests/",
             "Modules\\Affiliate\\Tests\\": "Modules/Affiliate/tests/",
             "Modules\\Auth\\Tests\\": "Modules/Auth/tests/",
             "Modules\\Cart\\Tests\\": "Modules/Cart/tests/",
@@ -69,6 +68,7 @@
             "Modules\\Checkout\\Tests\\": "Modules/Checkout/tests/",
             "Modules\\Cms\\Tests\\": "Modules/Cms/tests/",
             "Modules\\Core\\Tests\\": "Modules/Core/tests/",
+            "Modules\\Customer\\Tests\\": "Modules/Customer/tests/",
             "Modules\\Finance\\Tests\\": "Modules/Finance/tests/",
             "Modules\\Inventory\\Tests\\": "Modules/Inventory/tests/",
             "Modules\\Notifications\\Tests\\": "Modules/Notifications/tests/",

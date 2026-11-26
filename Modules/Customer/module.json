@@ -1,0 +1,11 @@
+{
+    "name": "Customer",
+    "alias": "customer",
+    "description": "Customer and registered user management, purchase verification segmentation (verified customers vs free/unverified users), and customer lifecycle operations",
+    "keywords": ["customer", "user", "buyer", "segmentation"],
+    "priority": 50,
+    "providers": [
+        "Modules\\Customer\\Providers\\CustomerServiceProvider"
+    ],
+    "files": []
+}

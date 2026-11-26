@@ -2,8 +2,14 @@
 
 namespace Modules\Core\Providers;
 
-use Nwidart\Modules\Support\ModuleServiceProvider;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Gate;
+use Modules\Core\Models\Setting;
+use Modules\Core\Observers\SettingObserver;
+use Modules\Core\Policies\DashboardPolicy;
+use Modules\Core\Policies\ReportPolicy;
+use Modules\Core\Policies\SettingPolicy;
+use Nwidart\Modules\Support\ModuleServiceProvider;
 
 class CoreServiceProvider extends ModuleServiceProvider
 {
@@ -33,6 +39,21 @@ class CoreServiceProvider extends ModuleServiceProvider
         EventServiceProvider::class,
         RouteServiceProvider::class,
     ];
+
+    public function boot(): void
+    {
+        parent::boot();
+
+        Setting::observe(SettingObserver::class);
+
+        Gate::define('viewDashboard', [DashboardPolicy::class, 'view']);
+        Gate::define('viewReports', [ReportPolicy::class, 'view']);
+        Gate::define('viewSalesReports', [ReportPolicy::class, 'viewSales']);
+        Gate::define('viewFinancialReports', [ReportPolicy::class, 'viewFinancial']);
+        Gate::define('viewSettings', [SettingPolicy::class, 'viewAny']);
+        Gate::define('updateSettings', [SettingPolicy::class, 'update']);
+        Gate::define('uploadSettingFile', [SettingPolicy::class, 'uploadFile']);
+    }
 
     /**
      * Define module schedules.
