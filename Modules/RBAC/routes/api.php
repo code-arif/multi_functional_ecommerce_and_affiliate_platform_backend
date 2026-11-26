@@ -60,4 +60,6 @@ Route::group(['prefix' => 'v1/admin', 'middleware' => ['auth:sanctum', 'admin', 
 // Authenticated user route (outside admin prefix)
 Route::prefix('v1')
     ->middleware(['auth:sanctum', 'banned'])
-    ->get('auth/my-permissions', [UserRoleController::class, 'myRoles']); // DONE: Fetch current admin permissions (auth store)
+    ->group(function () {
+        Route::get('auth/my-permissions', [UserRoleController::class, 'myRoles']); // DONE: Fetch current admin permissions (auth store)
+    });
