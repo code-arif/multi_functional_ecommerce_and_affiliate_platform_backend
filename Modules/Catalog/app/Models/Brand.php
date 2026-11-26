@@ -89,9 +89,9 @@ class Brand extends Model
         return str_starts_with($this->logo, 'http') ? $this->logo : asset('storage/' . $this->logo);
     }
 
-    public function getBannerUrlAttribute(): ?string
+    public function getBannerUrlAttribute(): string
     {
-        if (!$this->banner) return null;
+        if (!$this->banner) return asset('images/default-brand-banner.jpg');
         return str_starts_with($this->banner, 'http') ? $this->banner : asset('storage/' . $this->banner);
     }
 }

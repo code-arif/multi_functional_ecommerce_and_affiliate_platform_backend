@@ -5,6 +5,7 @@ namespace App\Exceptions;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
@@ -152,6 +153,26 @@ class Handler extends ExceptionHandler
             $status = $e->getStatusCode();
             $message = $e->getMessage() ?: 'Request error.';
             return $this->errorResponse($message, null, $status);
+        }
+
+        // Database constraint / query errors — never expose raw SQL
+        if ($e instanceof QueryException) {
+            Log::error('Database query exception', [
+                'code'    => $e->getCode(),
+                'message' => $e->getMessage(),
+                'url'     => $request->fullUrl(),
+                'user_id' => $request->user()?->id,
+            ]);
+
+            $isDuplicate = (string) $e->getCode() === '23000'
+                || str_contains($e->getMessage(), 'Duplicate entry')
+                || str_contains($e->getMessage(), 'UNIQUE constraint failed');
+
+            if ($isDuplicate) {
+                return $this->errorResponse('A record with these details already exists.', null, 409);
+            }
+
+            return $this->errorResponse('Unable to complete the database operation. Please try again.', null, 500);
         }
 
         // Generic server error — 500

@@ -3,6 +3,8 @@
 namespace Modules\Catalog\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Catalog\Models\Category;
+use Modules\Catalog\Traits\HasSlug;
 
 class StoreCategoryRequest extends FormRequest
 {
@@ -15,7 +17,12 @@ class StoreCategoryRequest extends FormRequest
     {
         $rules = [
             'parent_uuid' => 'nullable|exists:categories,uuid',
-            'name' => 'required|string|max:100',
+            'name' => [
+                'required',
+                'string',
+                'max:100',
+                HasSlug::slugValidationRule(Category::class, null, 'category'),
+            ],
             'description' => 'nullable|string|max:1000',
             'icon' => 'nullable|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',

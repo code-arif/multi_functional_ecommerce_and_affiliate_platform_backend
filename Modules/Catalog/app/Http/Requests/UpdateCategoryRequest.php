@@ -3,6 +3,8 @@
 namespace Modules\Catalog\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Catalog\Models\Category;
+use Modules\Catalog\Traits\HasSlug;
 
 class UpdateCategoryRequest extends FormRequest
 {
@@ -13,9 +15,16 @@ class UpdateCategoryRequest extends FormRequest
 
     public function rules(): array
     {
+        $categoryId = $this->route('category')?->id;
+
         $rules = [
             'parent_uuid' => 'nullable|exists:categories,uuid',
-            'name' => 'sometimes|string|max:100',
+            'name' => [
+                'sometimes',
+                'string',
+                'max:100',
+                HasSlug::slugValidationRule(Category::class, $categoryId, 'category'),
+            ],
             'description' => 'nullable|string|max:1000',
             'icon' => 'nullable|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',

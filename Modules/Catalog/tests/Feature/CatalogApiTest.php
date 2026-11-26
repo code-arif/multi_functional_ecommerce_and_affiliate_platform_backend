@@ -4,8 +4,11 @@ namespace Modules\Catalog\Tests\Feature;
 
 use Tests\TestCase;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Modules\Catalog\Models\Category;
 use Modules\Catalog\Models\Brand;
+use Modules\Notifications\Notifications\BrandProposedNotification;
+use Modules\Notifications\Notifications\BrandStatusNotification;
 use Modules\Notifications\Notifications\CategoryProposedNotification;
 use Modules\Notifications\Notifications\CategoryStatusNotification;
 use Modules\Product\Models\Product;
@@ -404,5 +407,124 @@ class CatalogApiTest extends TestCase
 
         $this->assertEquals(2, $vendorUser->notifications()->where('type', CategoryStatusNotification::class)->count());
         $this->assertEquals('rejected', $vendorUser->notifications()->latest()->first()->data['status']);
+    }
+
+    /** @test */
+    public function brand_can_be_created_when_cache_store_does_not_support_tagging(): void
+    {
+        $this->seed(RBACSeeder::class);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('admin');
+
+        config(['cache.default' => 'file']);
+        Cache::forgetDriver('file');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/brands/store', [
+                'name'      => 'NonTaggableBrand',
+                'status'    => 'approved',
+                'is_active' => true,
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.name', 'NonTaggableBrand');
+    }
+
+    /** @test */
+    public function duplicate_brand_or_category_name_returns_validation_error_on_name(): void
+    {
+        $this->seed(RBACSeeder::class);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('admin');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/brands/store', ['name' => 'apple'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['name']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/categories/store', ['name' => 'electronics'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['name']);
+    }
+
+    /** @test */
+    public function vendor_brand_proposal_and_admin_approve_reject_send_notifications(): void
+    {
+        $this->seed(RBACSeeder::class);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('admin');
+
+        $vendorUser = User::factory()->create(['status' => 'active']);
+        $vendorUser->assignRole('vendor');
+        Vendor::factory()->create([
+            'user_id'   => $vendorUser->id,
+            'shop_name' => 'Brand Proposal Shop',
+            'slug'      => 'brand-proposal-shop',
+            'status'    => 'active',
+        ]);
+
+        $proposal = $this->actingAs($vendorUser, 'sanctum')
+            ->postJson('/api/v1/vendor/brands/store', [
+                'name' => 'Proposed Studio Brand',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.status', 'pending');
+
+        $brandUuid = $proposal->json('data.uuid');
+
+        $this->assertEquals(1, $admin->notifications()->where('type', BrandProposedNotification::class)->count());
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/v1/admin/brands/{$brandUuid}")
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['created_at', 'updated_at', 'products']]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/admin/brands/{$brandUuid}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->assertEquals(1, $vendorUser->notifications()->where('type', BrandStatusNotification::class)->count());
+        $this->assertEquals('approved', $vendorUser->notifications()->latest()->first()->data['status']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/admin/brands/{$brandUuid}/reject", [
+                'reason' => 'Trademark conflict',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'rejected');
+
+        $this->assertEquals(2, $vendorUser->notifications()->where('type', BrandStatusNotification::class)->count());
+        $this->assertEquals('rejected', $vendorUser->notifications()->latest()->first()->data['status']);
+    }
+
+    /** @test */
+    public function category_and_brand_return_default_banner_urls_when_banner_is_not_submitted(): void
+    {
+        $this->seed(RBACSeeder::class);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('admin');
+
+        $catResponse = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/categories/store', ['name' => 'Default Banner Category'])
+            ->assertStatus(201);
+
+        $this->assertStringEndsWith(
+            '/images/default-category-banner.jpg',
+            $catResponse->json('data.banner_url')
+        );
+
+        $brandResponse = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/brands/store', ['name' => 'Default Banner Brand'])
+            ->assertStatus(201);
+
+        $this->assertStringEndsWith(
+            '/images/default-brand-banner.jpg',
+            $brandResponse->json('data.banner_url')
+        );
     }
 }

@@ -138,9 +138,9 @@ class Category extends Model
         return str_starts_with($this->image, 'http') ? $this->image : asset('storage/' . $this->image);
     }
 
-    public function getBannerUrlAttribute(): ?string
+    public function getBannerUrlAttribute(): string
     {
-        if (!$this->banner) return null;
+        if (!$this->banner) return asset('images/default-category-banner.jpg');
         return str_starts_with($this->banner, 'http') ? $this->banner : asset('storage/' . $this->banner);
     }
 }

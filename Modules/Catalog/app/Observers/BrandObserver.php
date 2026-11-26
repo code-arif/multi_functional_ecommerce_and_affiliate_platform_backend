@@ -2,33 +2,41 @@
 
 namespace Modules\Catalog\Observers;
 
-use Modules\Catalog\Models\Brand;
+use Illuminate\Cache\TaggableStore;
 use Illuminate\Support\Facades\Cache;
+use Modules\Catalog\Models\Brand;
 
 class BrandObserver
 {
     public function created(Brand $brand): void
     {
-        Cache::tags(['brands'])->flush();
+        $this->flushBrandCache();
     }
 
     public function updated(Brand $brand): void
     {
-        Cache::tags(['brands'])->flush();
+        $this->flushBrandCache();
     }
 
     public function deleted(Brand $brand): void
     {
-        Cache::tags(['brands'])->flush();
+        $this->flushBrandCache();
     }
 
     public function restored(Brand $brand): void
     {
-        Cache::tags(['brands'])->flush();
+        $this->flushBrandCache();
     }
 
     public function forceDeleted(Brand $brand): void
     {
-        Cache::tags(['brands'])->flush();
+        $this->flushBrandCache();
+    }
+
+    private function flushBrandCache(): void
+    {
+        if (Cache::getStore() instanceof TaggableStore) {
+            Cache::tags(['brands'])->flush();
+        }
     }
 }

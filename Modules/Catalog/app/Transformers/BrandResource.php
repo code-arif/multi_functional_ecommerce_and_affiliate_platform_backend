@@ -34,6 +34,17 @@ class BrandResource extends JsonResource
                 'id'   => $this->updater->id,
                 'name' => $this->updater->name,
             ]),
+            'products' => $this->whenLoaded('products', fn() => $this->products->map(fn($p) => [
+                'id'            => $p->id,
+                'uuid'          => $p->uuid,
+                'name'          => $p->name,
+                'slug'          => $p->slug,
+                'sku'           => $p->sku,
+                'status'        => $p->status,
+                'thumbnail_url' => $p->thumbnail_url,
+                'price'         => $p->price,
+                'sale_price'    => $p->sale_price,
+            ])),
             'created_at'       => $this->created_at,
             'updated_at'       => $this->updated_at,
         ];

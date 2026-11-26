@@ -33,8 +33,11 @@ Route::prefix('v1')->group(function () {
 
         // Brands
         Route::get('brands', [BrandManageController::class, 'index'])->middleware('permission:brands.view,brands.manage'); // DONE: Brand list, search & filter (Admin BrandsPage, ProductFormPage)
+        Route::get('brands/{brand:uuid}', [BrandManageController::class, 'show'])->middleware('permission:brands.view,brands.manage'); // DONE: Brand details & products (Admin BrandDetailPage)
         Route::post('brands/store', [BrandManageController::class, 'store'])->middleware('permission:brands.create,brands.manage'); // DONE: Create brand (Admin BrandsPage)
         Route::put('brands/{brand:uuid}/update', [BrandManageController::class, 'update'])->middleware('permission:brands.edit,brands.manage'); // DONE: Update brand (Admin BrandsPage)
+        Route::post('brands/{brand:uuid}/approve', [BrandManageController::class, 'approve'])->middleware('permission:brands.edit,brands.manage'); // DONE: Approve brand proposal (Admin BrandsPage, BrandDetailPage)
+        Route::post('brands/{brand:uuid}/reject', [BrandManageController::class, 'reject'])->middleware('permission:brands.edit,brands.manage'); // DONE: Reject brand proposal (Admin BrandsPage, BrandDetailPage)
         Route::delete('brands/{brand:uuid}/delete', [BrandManageController::class, 'destroy'])->middleware('permission:brands.manage'); // DONE: Delete brand (Admin BrandsPage)
     });
 
