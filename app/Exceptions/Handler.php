@@ -2,16 +2,21 @@
 
 namespace App\Exceptions;
 
-use Modules\Core\Traits\ApiResponse;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Auth\Access\AuthorizationException;
+use Modules\Core\Traits\ApiResponse;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -31,10 +36,43 @@ class Handler extends ExceptionHandler
         'password_confirmation',
     ];
 
+    /**
+     * Wire Laravel 12 exception configuration from bootstrap/app.php.
+     */
+    public static function configure(Exceptions $exceptions): void
+    {
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request, Throwable $e): bool => $request->is('api/*') || $request->expectsJson()
+        );
+
+        $exceptions->dontReport([
+            AuthenticationException::class,
+            ValidationException::class,
+            ModelNotFoundException::class,
+            ThrottleRequestsException::class,
+        ]);
+
+        $exceptions->report(function (Throwable $e): void {
+            if ($e instanceof ThrottleRequestsException) {
+                Log::channel('security')->warning('Rate limit exceeded', [
+                    'ip'  => request()->ip(),
+                    'url' => request()->fullUrl(),
+                ]);
+            }
+        });
+
+        $exceptions->render(function (Throwable $e, Request $request): ?JsonResponse {
+            if (!$request->is('api/*') && !$request->expectsJson()) {
+                return null;
+            }
+
+            return (new self(app()))->handleApiException($request, $e);
+        });
+    }
+
     public function register(): void
     {
         $this->reportable(function (Throwable $e) {
-            // Log security-relevant exceptions
             if ($e instanceof ThrottleRequestsException) {
                 Log::channel('security')->warning('Rate limit exceeded', [
                     'ip'  => request()->ip(),
@@ -46,7 +84,6 @@ class Handler extends ExceptionHandler
 
     public function render($request, Throwable $e)
     {
-        // All API requests get JSON responses
         if ($request->expectsJson() || $request->is('api/*')) {
             return $this->handleApiException($request, $e);
         }
@@ -54,7 +91,7 @@ class Handler extends ExceptionHandler
         return parent::render($request, $e);
     }
 
-    private function handleApiException($request, Throwable $e)
+    public function handleApiException(Request $request, Throwable $e): JsonResponse
     {
         // Validation errors — 422
         if ($e instanceof ValidationException) {
@@ -65,34 +102,40 @@ class Handler extends ExceptionHandler
             );
         }
 
-        // Model not found — 404
-        if ($e instanceof ModelNotFoundException) {
-            $model   = last(explode('\\', $e->getModel()));
-            return $this->errorResponse(
-                "{$model} not found.",
-                null,
-                404
-            );
-        }
-
-        // Route not found — 404
-        if ($e instanceof NotFoundHttpException) {
-            return $this->errorResponse('Route not found.', null, 404);
-        }
-
-        // Method not allowed — 405
-        if ($e instanceof MethodNotAllowedHttpException) {
-            return $this->errorResponse('HTTP method not allowed.', null, 405);
-        }
-
         // Unauthenticated — 401
         if ($e instanceof AuthenticationException) {
             return $this->errorResponse('Unauthenticated. Please log in.', null, 401);
         }
 
         // Authorization — 403
-        if ($e instanceof AuthorizationException) {
-            return $this->errorResponse('You do not have permission to perform this action.', null, 403);
+        if ($e instanceof AuthorizationException || $e instanceof AccessDeniedHttpException) {
+            return $this->errorResponse(
+                $e->getMessage() ?: 'You do not have permission to perform this action.',
+                null,
+                403
+            );
+        }
+
+        // Model not found — 404
+        if ($e instanceof ModelNotFoundException) {
+            $model = last(explode('\\', $e->getModel()));
+            return $this->errorResponse("{$model} not found.", null, 404);
+        }
+
+        // Route / wrapped Model not found — 404
+        if ($e instanceof NotFoundHttpException) {
+            $previous = $e->getPrevious();
+            if ($previous instanceof ModelNotFoundException) {
+                $model = last(explode('\\', $previous->getModel()));
+                return $this->errorResponse("{$model} not found.", null, 404);
+            }
+
+            return $this->errorResponse('Route not found.', null, 404);
+        }
+
+        // Method not allowed — 405
+        if ($e instanceof MethodNotAllowedHttpException) {
+            return $this->errorResponse('HTTP method not allowed.', null, 405);
         }
 
         // Rate limit — 429
@@ -104,6 +147,13 @@ class Handler extends ExceptionHandler
             );
         }
 
+        // Explicit HTTP aborts (e.g., abort(400, '...'), abort(403, '...'))
+        if ($e instanceof HttpExceptionInterface) {
+            $status = $e->getStatusCode();
+            $message = $e->getMessage() ?: 'Request error.';
+            return $this->errorResponse($message, null, $status);
+        }
+
         // Generic server error — 500
         $message = config('app.debug')
             ? $e->getMessage()
@@ -113,8 +163,8 @@ class Handler extends ExceptionHandler
             'message' => $e->getMessage(),
             'file'    => $e->getFile(),
             'line'    => $e->getLine(),
-            'url'     => request()->fullUrl(),
-            'user_id' => request()->user()?->id,
+            'url'     => $request->fullUrl(),
+            'user_id' => $request->user()?->id,
         ]);
 
         return $this->errorResponse($message, null, 500);

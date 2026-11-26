@@ -5,6 +5,7 @@ use Modules\Core\Http\Middleware\VendorAuthMiddleware;
 use Modules\Core\Http\Middleware\VendorMiddleware;
 use Modules\Core\Http\Middleware\PermissionMiddleware;
 use Modules\Core\Http\Middleware\RoleMiddleware;
+use App\Exceptions\Handler as ApiExceptionHandler;
 use App\Http\Middleware\BannedUserMiddleware;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\MaintenanceModeMiddleware;
@@ -21,6 +22,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Log;
 
@@ -38,13 +40,20 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeaders::class);
         $middleware->append(SanitizeInput::class);
 
-        // API Middleware Group
-        $middleware->api(append: [
-            ForceJsonResponse::class,
-            ThrottleRequests::class . ':api',
-            // ApiRequestLogger::class,
-            MaintenanceModeMiddleware::class,
-        ]);
+        // API Middleware Group: ForceJsonResponse MUST run before Authenticate
+        $middleware->api(
+            prepend: [
+                ForceJsonResponse::class,
+            ],
+            append: [
+                ThrottleRequests::class . ':api',
+                // ApiRequestLogger::class,
+                MaintenanceModeMiddleware::class,
+            ]
+        );
+
+        // Never redirect unauthenticated API requests to a web 'login' route
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
 
         // Authenticated Routes
         $middleware->alias([
@@ -66,7 +75,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-
+        ApiExceptionHandler::configure($exceptions);
     })->withProviders([
         AppServiceProvider::class,
         EventServiceProvider::class,
