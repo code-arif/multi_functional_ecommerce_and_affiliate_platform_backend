@@ -65,7 +65,7 @@ class RoleController
      */
     public function update(UpdateRoleRequest $request, int $id): JsonResponse
     {
-        $role = $this->rbacService->updateRole($id, $request->validated());
+        $role = $this->rbacService->updateRole($id, $request->validated(), $request->user());
         return $this->successResponse(
             new RoleResource($role),
             'Role updated successfully.'
@@ -75,10 +75,10 @@ class RoleController
     /**
      * Delete a role (system roles cannot be deleted).
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         try {
-            $this->rbacService->deleteRole($id);
+            $this->rbacService->deleteRole($id, $request->user());
         } catch (ModelNotFoundException $e) {
             return $this->notFoundResponse($e->getMessage());
         } catch (HttpException $e) {
@@ -93,7 +93,7 @@ class RoleController
      */
     public function syncPermissions(SyncRolePermissionsRequest $request, int $id): JsonResponse
     {
-        $role = $this->rbacService->syncRolePermissions($id, $request->validated('permissions'));
+        $role = $this->rbacService->syncRolePermissions($id, $request->validated('permissions'), $request->user());
         return $this->successResponse(
             new RoleResource($role),
             'Permissions synced successfully.'

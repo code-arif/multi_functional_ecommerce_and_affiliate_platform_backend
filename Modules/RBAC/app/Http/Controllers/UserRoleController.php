@@ -2,12 +2,13 @@
 
 namespace Modules\RBAC\Http\Controllers;
 
-use Modules\RBAC\Services\RBACService;
-use Modules\RBAC\Http\Resources\RoleResource;
-use Modules\RBAC\Http\Requests\AssignRoleRequest;
-use Modules\Core\Traits\ApiResponse;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Auth\Transformers\UserResource;
+use Modules\Core\Traits\ApiResponse;
+use Modules\RBAC\Http\Requests\AssignRoleRequest;
+use Modules\RBAC\Services\RBACService;
 
 class UserRoleController
 {
@@ -21,10 +22,10 @@ class UserRoleController
     public function index(Request $request): JsonResponse
     {
         $users = $this->rbacService->listUsersWithRoles($request->only([
-            'search', 'role', 'sort', 'order', 'per_page'
+            'search', 'role', 'sort', 'order', 'per_page',
         ]));
 
-        return $this->paginatedResponse($users);
+        return $this->paginatedResponse(UserResource::collection($users));
     }
 
     /**
@@ -33,8 +34,9 @@ class UserRoleController
     public function assign(AssignRoleRequest $request): JsonResponse
     {
         $user = $this->rbacService->assignRolesToUser(
-            \App\Models\User::findByUuidOrFail($request->validated('user_uuid'))->id,
-            $request->validated('roles')
+            User::findByUuidOrFail($request->validated('user_uuid'))->id,
+            $request->validated('roles'),
+            $request->user()
         );
 
         return $this->successResponse([
@@ -53,21 +55,20 @@ class UserRoleController
     public function userPermissions(string $userId): JsonResponse
     {
         $permissions = $this->rbacService->getUserPermissions(
-            \App\Models\User::findByUuidOrFail($userId)->id
+            User::findByUuidOrFail($userId)->id
         );
         return $this->successResponse($permissions->pluck('name'));
     }
 
     /**
-     * Get roles of the currently authenticated user.
+     * Get roles & effective permissions of the currently authenticated user.
      */
     public function myRoles(Request $request): JsonResponse
     {
         $user = $request->user()->load('roles.permissions');
         return $this->successResponse([
             'roles'       => $user->roles->pluck('name'),
-            'permissions' => $user->roles
-                ->flatMap(fn($r) => $r->permissions)
+            'permissions' => $user->getAllPermissions()
                 ->pluck('name')
                 ->unique()
                 ->values(),

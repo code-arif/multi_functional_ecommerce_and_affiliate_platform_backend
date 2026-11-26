@@ -23,10 +23,10 @@ class AssignRoleRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'user_id.required' => 'User ID is required.',
-            'user_id.exists'   => 'The selected user does not exist.',
-            'roles.required'   => 'At least one role is required.',
-            'roles.*.exists'   => 'One or more selected roles do not exist.',
+            'user_uuid.required' => 'User UUID is required.',
+            'user_uuid.exists'   => 'The selected user does not exist.',
+            'roles.required'     => 'At least one role is required.',
+            'roles.*.exists'     => 'One or more selected roles do not exist.',
         ];
     }
 }
