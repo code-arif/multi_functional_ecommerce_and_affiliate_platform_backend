@@ -201,8 +201,9 @@ class FinanceApiTest extends TestCase
         // If 403, we verify auth; if 200, we verify wallet credit.
         if ($response->isSuccessful()) {
             $response->assertJsonPath('data.status', 'approved');
-            $this->assertEquals(5100, $this->vendor->fresh()->wallet_balance);
-            $this->assertEquals(10100, $this->vendor->fresh()->total_earned);
+            // Net vendor earning = order_total (1000) - platform commission (100) = 900
+            $this->assertEquals(5900, $this->vendor->fresh()->wallet_balance);
+            $this->assertEquals(10900, $this->vendor->fresh()->total_earned);
         } else {
             $response->assertStatus(403);
         }

@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\Route;
 */
 
 
+// Cart module routes
+Route::prefix('v1')->group(base_path('Modules/Cart/routes/api.php'));
+
+// Product module routes
+Route::prefix('v1')->group(base_path('Modules/Product/routes/api.php'));
+
 // Checkout module routes
 Route::prefix('v1')->group(base_path('Modules/Checkout/routes/api.php'));
 

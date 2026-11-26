@@ -25,17 +25,12 @@ class CartController
         $validated = $request->validate([
             'product_uuid' => 'required|exists:products,uuid',
             'variant_uuid' => 'nullable|exists:product_variants,uuid',
-            'quantity'   => 'integer|min:1|max:' . config('ecommerce.cart.max_quantity', 100),
-            'unit_price' => 'nullable|numeric|min:0',
+            'quantity'     => 'integer|min:1|max:' . config('ecommerce.cart.max_quantity', 100),
         ]);
 
         $cart = $this->cartService->getCart($request->user(), $request->header('X-Session-ID'));
 
-        if ($request->user()) {
-            $cart->update(['user_id' => $request->user()->id]);
-        }
-
-        $item = $this->cartService->addItem($cart, $validated);
+        $this->cartService->addItem($cart, $validated);
 
         return $this->createdResponse(new CartResource($cart->fresh()->load('items.product', 'items.variant')));
     }

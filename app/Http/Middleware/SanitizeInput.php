@@ -104,24 +104,86 @@ class SanitizeInput
     }
 
     /**
-     * Strip dangerous tags but allow safe HTML for CMS fields.
+     * Strip dangerous tags, event handlers, and unsafe URI schemes for CMS/rich-text fields
+     * using DOM parsing rather than regex-only attribute stripping.
      */
     private function sanitizeHtml(string $value): string
     {
-        // Remove null bytes
         $value = str_replace("\0", '', $value);
 
-        // Allow safe HTML tags only
         $allowedTags = '<p><br><b><i><u><strong><em><ul><ol><li><h1><h2><h3><h4><a><img><blockquote><code><pre><table><thead><tbody><tr><td><th><span><div>';
+        $stripped = strip_tags($value, $allowedTags);
 
-        $value = strip_tags($value, $allowedTags);
+        if (trim($stripped) === '') {
+            return '';
+        }
 
-        // Remove dangerous attributes (onclick, onerror, javascript:, etc.)
-        $value = preg_replace('/\s*on\w+\s*=\s*["\'][^"\']*["\']/i', '', $value);
-        $value = preg_replace('/\s*javascript\s*:/i', '', $value);
-        $value = preg_replace('/\s*vbscript\s*:/i', '', $value);
-        $value = preg_replace('/\s*data\s*:/i', '', $value);
+        $dom = new \DOMDocument();
+        $prev = libxml_use_internal_errors(true);
+        $wrapped = '<?xml encoding="utf-8" ?><div>' . $stripped . '</div>';
 
-        return $value;
+        if (!$dom->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD)) {
+            libxml_clear_errors();
+            libxml_use_internal_errors($prev);
+            return strip_tags($stripped);
+        }
+
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+
+        $blockedTags = ['script', 'iframe', 'object', 'embed', 'form', 'style', 'svg', 'meta', 'link', 'base'];
+        foreach ($blockedTags as $tag) {
+            $nodes = $dom->getElementsByTagName($tag);
+            for ($i = $nodes->length - 1; $i >= 0; $i--) {
+                $node = $nodes->item($i);
+                $node?->parentNode?->removeChild($node);
+            }
+        }
+
+        $xpath = new \DOMXPath($dom);
+        foreach ($xpath->query('//*') as $element) {
+            if (!$element instanceof \DOMElement) {
+                continue;
+            }
+            $toRemove = [];
+            foreach ($element->attributes as $attr) {
+                $attrName = strtolower($attr->name);
+                $attrVal  = trim($attr->value);
+
+                // Strip all inline event handlers (on*) and style attributes
+                if (str_starts_with($attrName, 'on') || $attrName === 'style') {
+                    $toRemove[] = $attr->name;
+                    continue;
+                }
+
+                // Enforce safe URL schemes on link/media attributes
+                if (in_array($attrName, ['href', 'src', 'xlink:href', 'formaction'], true)) {
+                    $normalized = preg_replace('/[\x00-\x20]+/', '', strtolower($attrVal));
+                    $isSafe = str_starts_with($normalized, 'http://')
+                        || str_starts_with($normalized, 'https://')
+                        || str_starts_with($normalized, 'mailto:')
+                        || str_starts_with($normalized, '/')
+                        || str_starts_with($normalized, '#');
+                    if (!$isSafe) {
+                        $toRemove[] = $attr->name;
+                    }
+                }
+            }
+            foreach ($toRemove as $name) {
+                $element->removeAttribute($name);
+            }
+        }
+
+        $container = $dom->getElementsByTagName('div')->item(0);
+        if (!$container) {
+            return strip_tags($stripped);
+        }
+
+        $clean = '';
+        foreach ($container->childNodes as $child) {
+            $clean .= $dom->saveHTML($child);
+        }
+
+        return $clean;
     }
 }

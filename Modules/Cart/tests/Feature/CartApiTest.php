@@ -74,6 +74,24 @@ class CartApiTest extends TestCase
     }
 
     /** @test */
+    public function client_cannot_override_product_unit_price_in_cart(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/cart/items', [
+                'product_uuid' => $this->product->uuid,
+                'quantity'     => 2,
+                'unit_price'   => 0.01,
+            ]);
+
+        $response->assertCreated();
+
+        $cart = Cart::where('user_id', $this->user->id)->first();
+        $item = $cart->items()->first();
+        $this->assertEquals(100.00, (float) $item->unit_price);
+        $this->assertEquals(200.00, (float) $item->total_price);
+    }
+
+    /** @test */
     public function user_cannot_exceed_stock_quantity(): void
     {
         $response = $this->actingAs($this->user, 'sanctum')

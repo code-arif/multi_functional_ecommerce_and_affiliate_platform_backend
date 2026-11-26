@@ -30,7 +30,7 @@ Route::prefix('search')->middleware('throttle:search')->group(function () {
 
 // Admin Search Routes
 
-Route::prefix('admin/search')->middleware(['auth:sanctum', 'permission:search.view'])->group(function () {
+Route::prefix('admin/search')->middleware(['auth:sanctum', 'admin', 'banned', 'permission:search.view'])->group(function () {
     Route::get('analytics', [AdminSearchController::class, 'analytics'])->name('admin.search.analytics');
     Route::get('popular', [AdminSearchController::class, 'popularSearches'])->name('admin.search.popular');
     Route::get('zero-results', [AdminSearchController::class, 'zeroResultSearches'])->name('admin.search.zero-results');
@@ -39,5 +39,5 @@ Route::prefix('admin/search')->middleware(['auth:sanctum', 'permission:search.vi
 
 // Reindex requires manage permission
 Route::post('admin/search/reindex', [AdminSearchController::class, 'reindex'])
-    ->middleware(['auth:sanctum', 'permission:search.manage'])
+    ->middleware(['auth:sanctum', 'admin', 'banned', 'permission:search.manage'])
     ->name('admin.search.reindex');

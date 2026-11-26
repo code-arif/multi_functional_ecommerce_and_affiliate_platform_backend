@@ -7,6 +7,7 @@ use Modules\Cart\Models\CartItem;
 use Modules\Cart\Events\CartUpdated;
 use Modules\Product\Models\Product;
 use Modules\Product\Models\ProductVariant;
+use Modules\Promotions\Models\Coupon;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -34,51 +35,61 @@ class CartService
     }
 
     /**
-     * Add an item to the cart with stock validation (supports simple + variable products).
+     * Add an item to the cart with server-side pricing and stock validation (supports simple + variable products).
      */
     public function addItem(Cart $cart, array $data): CartItem
     {
         $product = Product::findByUuidOrFail($data['product_uuid']);
+        if ($product->status !== 'active') {
+            abort(400, 'This product is not available for purchase.');
+        }
+
         $variant = !empty($data['variant_uuid']) ? ProductVariant::findByUuidOrFail($data['variant_uuid']) : null;
-        $requestedQty = $data['quantity'] ?? 1;
+        if ($variant && ($variant->product_id !== $product->id || !$variant->is_active)) {
+            abort(400, 'Invalid product variant selected.');
+        }
+
+        $requestedQty = (int) ($data['quantity'] ?? 1);
         $maxQty = config('ecommerce.cart.max_quantity', 100);
 
         if ($requestedQty > $maxQty) {
             abort(400, "Maximum quantity per item is {$maxQty}.");
         }
 
-        // Stock validation: variable products check variant stock, simple products check product stock
-        if ($variant) {
-            if ($variant->stock_quantity < $requestedQty) {
-                abort(400, "Only {$variant->stock_quantity} units available for this variant.");
-            }
-        } elseif ($product->manage_stock) {
-            $existing = $cart->items()
-                ->where('product_id', $product->id)
-                ->whereNull('variant_id')
-                ->first();
-
-            $currentQty = $existing ? $existing->quantity : 0;
-            if (($currentQty + $requestedQty) > $product->stock_quantity) {
-                abort(400, "Only {$product->stock_quantity} units available.");
-            }
-        }
-
-        $unitPrice = $data['unit_price'] ?? ($variant
-            ? ($variant->sale_price ?? $product->current_price)
-            : $product->current_price);
-
         $existing = $cart->items()
             ->where('product_id', $product->id)
             ->where('variant_id', $variant?->id)
             ->first();
 
-        if ($existing) {
-            $newQty = $existing->quantity + $requestedQty;
-            if ($newQty > $maxQty) {
-                abort(400, "Maximum quantity per item is {$maxQty}.");
+        $currentQty = $existing ? $existing->quantity : 0;
+        $newQty = $currentQty + $requestedQty;
+
+        if ($newQty > $maxQty) {
+            abort(400, "Maximum quantity per item is {$maxQty}.");
+        }
+
+        // Stock validation: variable products check variant stock, simple products check product stock
+        if ($variant) {
+            if ($newQty > $variant->stock_quantity) {
+                abort(400, "Only {$variant->stock_quantity} units available for this variant.");
             }
-            $existing->update(['quantity' => $newQty]);
+        } elseif ($product->manage_stock) {
+            if ($newQty > $product->stock_quantity) {
+                abort(400, "Only {$product->stock_quantity} units available.");
+            }
+        }
+
+        // Always compute unit price server-side — never trust client-supplied prices
+        $unitPrice = $variant
+            ? ($variant->sale_price ?? $variant->price ?? $product->current_price)
+            : $product->current_price;
+
+        if ($existing) {
+            $existing->update([
+                'quantity'    => $newQty,
+                'unit_price'  => $unitPrice,
+                'total_price' => round($unitPrice * $newQty, 2),
+            ]);
             CartUpdated::dispatch($cart);
             return $existing->fresh();
         }
@@ -88,7 +99,7 @@ class CartService
             'variant_id'  => $variant?->id,
             'quantity'    => $requestedQty,
             'unit_price'  => $unitPrice,
-            'total_price' => $unitPrice * $requestedQty,
+            'total_price' => round($unitPrice * $requestedQty, 2),
         ]);
 
         CartUpdated::dispatch($cart);
@@ -148,9 +159,33 @@ class CartService
 
     public function applyCoupon(Cart $cart, string $couponCode): Cart
     {
+        $coupon = Coupon::where('code', $couponCode)
+            ->where('is_active', true)
+            ->where(fn($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+            ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
+            ->first();
+
+        if (!$coupon) {
+            abort(422, 'Invalid or expired coupon code.');
+        }
+
+        if ($coupon->usage_limit && $coupon->used_count >= $coupon->usage_limit) {
+            abort(422, 'This coupon has reached its usage limit.');
+        }
+
+        $subtotal = (float) $cart->subtotal;
+        if ($coupon->minimum_order_amount && $subtotal < (float) $coupon->minimum_order_amount) {
+            abort(422, "Minimum order amount of {$coupon->minimum_order_amount} is required for this coupon.");
+        }
+
+        $discount = $coupon->type === 'percentage'
+            ? min($subtotal * ((float) $coupon->value / 100), $coupon->maximum_discount !== null ? (float) $coupon->maximum_discount : $subtotal)
+            : min((float) $coupon->value, $subtotal);
+
         $cart->update([
-            'coupon_code'     => $couponCode,
-            'discount_amount' => 0,
+            'coupon_id'       => $coupon->id,
+            'coupon_code'     => $coupon->code,
+            'discount_amount' => round($discount, 2),
         ]);
 
         CartUpdated::dispatch($cart);
@@ -220,7 +255,12 @@ class CartService
                 ->first();
 
             if ($existing) {
-                $existing->increment('quantity', $guestItem->quantity);
+                $maxQty = config('ecommerce.cart.max_quantity', 100);
+                $newQty = min($maxQty, $existing->quantity + $guestItem->quantity);
+                $existing->update([
+                    'quantity'    => $newQty,
+                    'total_price' => round((float) $existing->unit_price * $newQty, 2),
+                ]);
             } else {
                 $guestItem->update(['cart_id' => $userCart->id]);
             }

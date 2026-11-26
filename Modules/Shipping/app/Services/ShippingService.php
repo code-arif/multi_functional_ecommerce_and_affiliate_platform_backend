@@ -33,8 +33,7 @@ class ShippingService
 
         if ($zoneIds->isEmpty()) {
             $zoneIds = ShippingZone::active()
-                ->whereNull('countries')
-                ->orWhere('countries', '[]')
+                ->where(fn($q) => $q->whereNull('countries')->orWhere('countries', '[]'))
                 ->pluck('id');
         }
 

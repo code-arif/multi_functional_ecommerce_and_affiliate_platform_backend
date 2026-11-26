@@ -138,9 +138,13 @@ Route::middleware(['auth:sanctum', 'admin', 'banned'])->prefix('admin')->group(f
                 return response()->json(['success' => true, 'message' => 'Account unlocked.']);
             });
             Route::post('block-ip', function (\Illuminate\Http\Request $req) {
-                $req->validate(['ip' => 'required|ip', 'duration' => 'nullable|integer', 'reason' => 'nullable|string']);
+                $validated = $req->validate([
+                    'ip'       => 'required|ip',
+                    'duration' => 'nullable|integer|min:60',
+                    'reason'   => 'nullable|string|max:255',
+                ]);
                 app(\Modules\Core\Services\Security\SecurityService::class)
-                    ->blockIp($req->ip_address, $req->duration ?? 3600, $req->reason ?? '');
+                    ->blockIp($validated['ip'], $validated['duration'] ?? 3600, $validated['reason'] ?? '');
                 return response()->json(['success' => true, 'message' => 'IP blocked.']);
             });
             Route::post('revoke-tokens/{user}', function (User $user) {

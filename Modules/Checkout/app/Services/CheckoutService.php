@@ -14,7 +14,10 @@ use Modules\Orders\Enums\OrderStatus;
 use Modules\Orders\Enums\PaymentStatus;
 use Modules\Orders\Models\Order;
 use Modules\Orders\Services\OrderService;
+use Modules\Product\Models\Product;
+use Modules\Product\Models\ProductVariant;
 use Modules\Promotions\Models\Coupon;
+use Modules\Promotions\Models\CouponUsage;
 
 class CheckoutService
 {
@@ -31,7 +34,8 @@ class CheckoutService
 
         $itemsByVendor = $this->cartService->getItemsGroupedByVendor($cart);
         $shippingAddress = $this->resolveAddress($data, $user);
-        $couponDiscount = $this->validateCoupon($cart->coupon_code, $cart->subtotal);
+        $coupon = $this->resolveValidCoupon($cart->coupon_code, $cart->subtotal, $user);
+        $couponDiscount = $coupon ? $this->computeCouponDiscount($coupon, $cart->subtotal) : 0;
         $taxRate = $this->getTaxRate($shippingAddress);
 
         $groups = [];
@@ -85,6 +89,14 @@ class CheckoutService
         $this->ensureCartOwnership($cart, $user);
 
         return DB::transaction(function () use ($cart, $user, $data) {
+            // Lock cart to prevent concurrent double-checkout of the same cart
+            $lockedCart = Cart::whereKey($cart->id)->lockForUpdate()->firstOrFail();
+            $lockedCart->load('items.product.vendors', 'items.variant');
+
+            if ($lockedCart->items->isEmpty()) {
+                abort(400, 'Your cart is empty.');
+            }
+
             $shippingAddress = $this->resolveAddress($data, $user);
             $shippingAddrJson = is_string($shippingAddress) ? $shippingAddress : json_encode($shippingAddress);
             $billingAddrJson = isset($data['billing_address'])
@@ -100,13 +112,51 @@ class CheckoutService
             $paymentMethod = $data['payment_method'] ?? 'cod';
             $notes = $data['notes'] ?? null;
 
-            $itemsByVendor = $this->cartService->getItemsGroupedByVendor($cart);
-            $couponDiscount = $this->validateCoupon($cart->coupon_code, $cart->subtotal);
+            $itemsByVendor = $this->cartService->getItemsGroupedByVendor($lockedCart);
+
+            // Recompute cart subtotal from authoritative DB prices before discount calculation
+            $authoritativeSubtotal = 0.0;
+            foreach ($itemsByVendor as &$vendorGroup) {
+                $groupSubtotal = 0.0;
+                foreach ($vendorGroup['items'] as $item) {
+                    $product = Product::whereKey($item->product_id)->lockForUpdate()->firstOrFail();
+                    $variant = $item->variant_id
+                        ? ProductVariant::whereKey($item->variant_id)->lockForUpdate()->firstOrFail()
+                        : null;
+
+                    if ($product->status !== 'active') {
+                        abort(400, "Product '{$product->name}' is no longer available.");
+                    }
+
+                    if ($variant) {
+                        if ($variant->stock_quantity < $item->quantity) {
+                            abort(400, "Insufficient stock for '{$product->name}'. Only {$variant->stock_quantity} left.");
+                        }
+                        $unitPrice = (float) ($variant->sale_price ?? $variant->price ?? $product->current_price);
+                    } else {
+                        if ($product->manage_stock && $product->stock_quantity < $item->quantity) {
+                            abort(400, "Insufficient stock for '{$product->name}'. Only {$product->stock_quantity} left.");
+                        }
+                        $unitPrice = (float) $product->current_price;
+                    }
+
+                    $item->setAttribute('locked_product', $product);
+                    $item->setAttribute('locked_variant', $variant);
+                    $item->setAttribute('authoritative_unit_price', $unitPrice);
+                    $item->setAttribute('authoritative_total', round($unitPrice * $item->quantity, 2));
+                    $groupSubtotal += round($unitPrice * $item->quantity, 2);
+                }
+                $vendorGroup['authoritative_subtotal'] = round($groupSubtotal, 2);
+                $authoritativeSubtotal += $vendorGroup['authoritative_subtotal'];
+            }
+            unset($vendorGroup);
+
+            $coupon = $this->resolveValidCoupon($lockedCart->coupon_code, $authoritativeSubtotal, $user, lock: true);
+            $couponDiscount = $coupon ? $this->computeCouponDiscount($coupon, $authoritativeSubtotal) : 0.0;
             $taxRate = $this->getTaxRate($shippingAddress);
 
-            // Increment coupon usage if a valid coupon was applied
-            if ($couponDiscount > 0 && $cart->coupon_code) {
-                Coupon::where('code', $cart->coupon_code)->increment('used_count');
+            if ($coupon && $couponDiscount > 0) {
+                $coupon->increment('used_count');
             }
 
             /** @var OrderService $orderService */
@@ -115,34 +165,41 @@ class CheckoutService
             $orders = [];
 
             foreach ($itemsByVendor as $vendorGroup) {
-                $vendorSubtotal = round(collect($vendorGroup['items'])->sum(fn($item) => $item->total), 2);
+                $vendorSubtotal = $vendorGroup['authoritative_subtotal'];
                 $vendorShipping = $this->calculateShippingCost($vendorSubtotal, $vendorGroup['vendor_id']);
                 $vendorTax = round($vendorSubtotal * $taxRate, 2);
                 $vendorDiscount = $couponDiscount > 0
-                    ? round($couponDiscount * ($vendorSubtotal / max($cart->subtotal, 1)), 2)
+                    ? round($couponDiscount * ($vendorSubtotal / max($authoritativeSubtotal, 1)), 2)
                     : 0;
                 $vendorTotal = round($vendorSubtotal + $vendorShipping + $vendorTax - $vendorDiscount, 2);
 
-                // Build order items + deduct stock
+                // Build order items + deduct stock atomically on locked rows
                 $items = [];
                 foreach ($vendorGroup['items'] as $item) {
+                    /** @var Product $product */
+                    $product = $item->getAttribute('locked_product');
+                    /** @var ProductVariant|null $variant */
+                    $variant = $item->getAttribute('locked_variant');
+                    $unitPrice = $item->getAttribute('authoritative_unit_price');
+                    $lineTotal = $item->getAttribute('authoritative_total');
+
                     $items[] = [
-                        'product_id'         => $item->product_id,
-                        'product_variant_id' => $item->variant_id,
+                        'product_id'         => $product->id,
+                        'product_variant_id' => $variant?->id,
                         'vendor_id'          => $vendorGroup['vendor_id'] > 0 ? $vendorGroup['vendor_id'] : null,
-                        'product_name'       => $item->product->name,
-                        'product_sku'        => $item->product->sku,
-                        'variant_attributes' => $item->variant?->attributes ?? null,
-                        'product_image'      => $item->product->thumbnail,
-                        'unit_price'         => $item->unit_price,
+                        'product_name'       => $product->name,
+                        'product_sku'        => $product->sku,
+                        'variant_attributes' => $variant?->attributes ?? null,
+                        'product_image'      => $product->thumbnail,
+                        'unit_price'         => $unitPrice,
                         'quantity'           => $item->quantity,
-                        'subtotal'           => round($item->unit_price * $item->quantity, 2),
+                        'subtotal'           => $lineTotal,
                     ];
 
-                    if ($item->variant_id) {
-                        $item->variant->decrement('stock_quantity', $item->quantity);
-                    } else {
-                        $item->product->decrementStock($item->quantity);
+                    if ($variant) {
+                        $variant->decrement('stock_quantity', $item->quantity);
+                    } elseif ($product->manage_stock) {
+                        $product->decrementStock($item->quantity);
                     }
                 }
 
@@ -159,7 +216,8 @@ class CheckoutService
                     'coupon_discount'  => $vendorDiscount,
                     'tax_amount'       => $vendorTax,
                     'total_amount'     => $vendorTotal,
-                    'coupon_code'      => $cart->coupon_code,
+                    'coupon_id'        => $coupon?->id,
+                    'coupon_code'      => $coupon?->code,
                     'payment_method'   => $paymentMethod,
                     'payment_status'   => PaymentStatus::Pending->value,
                     'shipping_method'  => $data['shipping_method'] ?? 'standard',
@@ -181,12 +239,26 @@ class CheckoutService
                     'actor_name'       => $user->name,
                 ]);
 
+                if ($coupon && $vendorDiscount > 0) {
+                    CouponUsage::create([
+                        'coupon_id'       => $coupon->id,
+                        'user_id'         => $user->id,
+                        'order_id'        => $order->id,
+                        'discount_amount' => $vendorDiscount,
+                    ]);
+                }
+
                 $orders[] = $order;
             }
 
-            $cart->items()->delete();
+            $lockedCart->items()->delete();
+            $lockedCart->update([
+                'coupon_id'       => null,
+                'coupon_code'     => null,
+                'discount_amount' => 0,
+            ]);
 
-            CheckoutProcessed::dispatch($cart, $orders, $user);
+            CheckoutProcessed::dispatch($lockedCart, $orders, $user);
 
             Log::info('Checkout completed', [
                 'user_id' => $user->id,
@@ -244,26 +316,57 @@ class CheckoutService
         }
     }
 
-    private function validateCoupon(?string $couponCode, float $subtotal): float
+    private function resolveValidCoupon(?string $couponCode, float $subtotal, User $user, bool $lock = false): ?Coupon
     {
-        if (!$couponCode) return 0;
-
-        $coupon = Coupon::where('code', $couponCode)
-            ->where('is_active', true)
-            ->where(fn($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
-            ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
-            ->first();
-
-        if (!$coupon) return 0;
-
-        if ($coupon->max_uses && $coupon->used_count >= $coupon->max_uses) return 0;
-        if ($coupon->min_order_amount && $subtotal < $coupon->min_order_amount) return 0;
-
-        if ($coupon->type === 'percentage') {
-            return min($subtotal * ($coupon->value / 100), $coupon->max_discount ?? PHP_FLOAT_MAX);
+        if (!$couponCode) {
+            return null;
         }
 
-        return min($coupon->value, $subtotal);
+        $query = Coupon::where('code', $couponCode)
+            ->where('is_active', true)
+            ->where(fn($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+            ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()));
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        $coupon = $query->first();
+        if (!$coupon) {
+            return null;
+        }
+
+        if ($coupon->usage_limit && $coupon->used_count >= $coupon->usage_limit) {
+            return null;
+        }
+
+        if ($coupon->usage_limit_per_user) {
+            $userUsageCount = CouponUsage::where('coupon_id', $coupon->id)
+                ->where('user_id', $user->id)
+                ->count();
+            if ($userUsageCount >= $coupon->usage_limit_per_user) {
+                return null;
+            }
+        }
+
+        if ($coupon->minimum_order_amount && $subtotal < (float) $coupon->minimum_order_amount) {
+            return null;
+        }
+
+        return $coupon;
+    }
+
+    private function computeCouponDiscount(Coupon $coupon, float $subtotal): float
+    {
+        if ($coupon->type === 'percentage') {
+            $discount = $subtotal * ((float) $coupon->value / 100);
+            if ($coupon->maximum_discount !== null) {
+                $discount = min($discount, (float) $coupon->maximum_discount);
+            }
+            return round(min($discount, $subtotal), 2);
+        }
+
+        return round(min((float) $coupon->value, $subtotal), 2);
     }
 
     private function calculateShippingCost(float $subtotal, int $vendorId): float

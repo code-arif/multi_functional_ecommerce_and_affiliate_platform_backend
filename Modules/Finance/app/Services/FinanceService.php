@@ -57,7 +57,7 @@ class FinanceService
     }
 
     /**
-     * Approve a commission and credit the vendor's wallet.
+     * Approve a commission and credit the vendor's net earnings (order_total - commission_amount) to their wallet.
      */
     public function approveCommission(Commission $commission): Commission
     {
@@ -66,37 +66,46 @@ class FinanceService
         }
 
         return DB::transaction(function () use ($commission) {
-            $commission->update([
-                'status'     => 'approved',
+            $lockedCommission = Commission::whereKey($commission->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedCommission->status !== 'pending') {
+                abort(400, 'Commission has already been ' . $lockedCommission->status . '.');
+            }
+
+            $vendor = Vendor::whereKey($lockedCommission->vendor_id)->lockForUpdate()->firstOrFail();
+            $netEarning = round(max(0, (float) $lockedCommission->order_total - (float) $lockedCommission->commission_amount), 2);
+
+            $lockedCommission->update([
+                'status'      => 'approved',
                 'approved_at' => now(),
             ]);
 
-            $vendor = $commission->vendor;
-            $before = $vendor->wallet_balance;
-            $after  = $before + $commission->commission_amount;
+            $before = (float) $vendor->wallet_balance;
+            $after  = round($before + $netEarning, 2);
 
             VendorWalletTransaction::create([
-                'vendor_id'       => $vendor->id,
-                'type'            => 'commission',
-                'amount'          => $commission->commission_amount,
-                'balance_before'  => $before,
-                'balance_after'   => $after,
-                'description'     => "Commission for Order #{$commission->order->order_number}",
-                'reference_type'  => 'order',
-                'reference_id'    => $commission->order_id,
-                'status'          => 'completed',
+                'vendor_id'      => $vendor->id,
+                'type'           => 'commission',
+                'amount'         => $netEarning,
+                'balance_before' => $before,
+                'balance_after'  => $after,
+                'description'    => "Order #{$lockedCommission->order->order_number} earnings (Fee: {$lockedCommission->commission_amount})",
+                'reference_type' => 'order',
+                'reference_id'   => $lockedCommission->order_id,
+                'status'         => 'completed',
             ]);
 
-            $vendor->increment('wallet_balance', $commission->commission_amount);
-            $vendor->increment('total_earned', $commission->commission_amount);
+            $vendor->increment('wallet_balance', $netEarning);
+            $vendor->increment('total_earned', $netEarning);
 
             Log::info('Commission approved', [
-                'commission_id' => $commission->id,
-                'vendor_id'     => $vendor->id,
-                'amount'        => $commission->commission_amount,
+                'commission_id'     => $lockedCommission->id,
+                'vendor_id'         => $vendor->id,
+                'commission_amount' => $lockedCommission->commission_amount,
+                'vendor_net_credit' => $netEarning,
             ]);
 
-            return $commission->fresh();
+            return $lockedCommission->fresh();
         });
     }
 
@@ -135,24 +144,26 @@ class FinanceService
     // ─── Payout Management ─────────────────────────────────────────
 
     /**
-     * Vendor requests a payout.
+     * Vendor requests a payout (row-locked to prevent concurrent wallet overdraft).
      */
     public function requestPayout(Vendor $vendor, float $amount, array $data = []): VendorPayoutRequest
     {
-        if ($vendor->wallet_balance < $amount) {
-            abort(400, 'Insufficient wallet balance.');
-        }
-
         if ($amount < 100) {
             abort(400, 'Minimum payout amount is 100.');
         }
 
         return DB::transaction(function () use ($vendor, $amount, $data) {
-            $before = $vendor->wallet_balance;
-            $after  = $before - $amount;
+            $lockedVendor = Vendor::whereKey($vendor->id)->lockForUpdate()->firstOrFail();
+
+            if ((float) $lockedVendor->wallet_balance < $amount) {
+                abort(400, 'Insufficient wallet balance.');
+            }
+
+            $before = (float) $lockedVendor->wallet_balance;
+            $after  = round($before - $amount, 2);
 
             $payout = VendorPayoutRequest::create([
-                'vendor_id'       => $vendor->id,
+                'vendor_id'       => $lockedVendor->id,
                 'amount'          => $amount,
                 'balance_before'  => $before,
                 'balance_after'   => $after,
@@ -163,10 +174,10 @@ class FinanceService
             ]);
 
             // Hold the amount in wallet (reduce available balance)
-            $vendor->decrement('wallet_balance', $amount);
+            $lockedVendor->decrement('wallet_balance', $amount);
 
             VendorWalletTransaction::create([
-                'vendor_id'       => $vendor->id,
+                'vendor_id'       => $lockedVendor->id,
                 'type'            => 'payout',
                 'amount'          => -$amount,
                 'balance_before'  => $before,
@@ -187,21 +198,27 @@ class FinanceService
     public function approvePayout(VendorPayoutRequest $payout, User $admin): VendorPayoutRequest
     {
         return DB::transaction(function () use ($payout, $admin) {
-            $payout->update([
+            $lockedPayout = VendorPayoutRequest::whereKey($payout->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedPayout->status !== 'pending') {
+                abort(400, 'Only pending payout requests can be approved.');
+            }
+
+            $lockedPayout->update([
                 'status'      => 'approved',
                 'approved_by' => $admin->id,
                 'approved_at' => now(),
             ]);
 
-            $payout->vendor->increment('total_withdrawn', $payout->amount);
+            $lockedPayout->vendor()->increment('total_withdrawn', $lockedPayout->amount);
 
             Log::info('Payout approved', [
-                'payout_id' => $payout->id,
-                'vendor_id' => $payout->vendor_id,
-                'amount'    => $payout->amount,
+                'payout_id' => $lockedPayout->id,
+                'vendor_id' => $lockedPayout->vendor_id,
+                'amount'    => $lockedPayout->amount,
             ]);
 
-            return $payout->fresh();
+            return $lockedPayout->fresh();
         });
     }
 
@@ -211,33 +228,41 @@ class FinanceService
     public function rejectPayout(VendorPayoutRequest $payout, User $admin, string $reason): VendorPayoutRequest
     {
         return DB::transaction(function () use ($payout, $admin, $reason) {
-            // Refund to wallet
-            $vendor = $payout->vendor;
-            $before = $vendor->wallet_balance;
-            $after  = $before + $payout->amount;
+            $lockedPayout = VendorPayoutRequest::whereKey($payout->id)->lockForUpdate()->firstOrFail();
 
-            $vendor->increment('wallet_balance', $payout->amount);
+            if (!in_array($lockedPayout->status, ['pending', 'approved'], true)) {
+                abort(400, 'This payout request can no longer be rejected.');
+            }
+
+            $vendor = Vendor::whereKey($lockedPayout->vendor_id)->lockForUpdate()->firstOrFail();
+            $before = (float) $vendor->wallet_balance;
+            $after  = round($before + (float) $lockedPayout->amount, 2);
+
+            $vendor->increment('wallet_balance', $lockedPayout->amount);
+            if ($lockedPayout->status === 'approved') {
+                $vendor->decrement('total_withdrawn', $lockedPayout->amount);
+            }
 
             VendorWalletTransaction::create([
                 'vendor_id'       => $vendor->id,
                 'type'            => 'adjustment',
-                'amount'          => $payout->amount,
+                'amount'          => $lockedPayout->amount,
                 'balance_before'  => $before,
                 'balance_after'   => $after,
-                'description'     => "Payout #{$payout->id} rejected: {$reason}",
+                'description'     => "Payout #{$lockedPayout->id} rejected: {$reason}",
                 'reference_type'  => 'payout',
-                'reference_id'    => $payout->id,
+                'reference_id'    => $lockedPayout->id,
                 'status'          => 'completed',
             ]);
 
-            $payout->update([
+            $lockedPayout->update([
                 'status'       => 'rejected',
                 'approved_by'  => $admin->id,
                 'approved_at'  => now(),
                 'admin_notes'  => $reason,
             ]);
 
-            return $payout->fresh();
+            return $lockedPayout->fresh();
         });
     }
 
@@ -246,17 +271,24 @@ class FinanceService
      */
     public function completePayout(VendorPayoutRequest $payout): VendorPayoutRequest
     {
-        $payout->update([
-            'status'       => 'completed',
-            'completed_at' => now(),
-        ]);
+        return DB::transaction(function () use ($payout) {
+            $lockedPayout = VendorPayoutRequest::whereKey($payout->id)->lockForUpdate()->firstOrFail();
 
-        // Update wallet transaction status
-        VendorWalletTransaction::where('reference_type', 'payout')
-            ->where('reference_id', $payout->id)
-            ->update(['status' => 'completed']);
+            if ($lockedPayout->status !== 'approved') {
+                abort(400, 'Only approved payout requests can be marked as completed.');
+            }
 
-        return $payout->fresh();
+            $lockedPayout->update([
+                'status'       => 'completed',
+                'completed_at' => now(),
+            ]);
+
+            VendorWalletTransaction::where('reference_type', 'payout')
+                ->where('reference_id', $lockedPayout->id)
+                ->update(['status' => 'completed']);
+
+            return $lockedPayout->fresh();
+        });
     }
 
     /**

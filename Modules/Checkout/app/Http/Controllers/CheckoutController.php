@@ -88,21 +88,22 @@ class CheckoutController
     }
 
     /**
-     * POST /api/v1/checkout/shipping-cost
-     * Calculate shipping cost.
+     * GET /api/v1/checkout/shipping-cost
+     * Calculate shipping cost for the authenticated user's cart.
      */
     public function shippingCost(Request $request): JsonResponse
     {
         $cart = $this->cartService->getCart($request->user(), null);
+        $options = $this->checkoutService->getShippingOptions($cart);
+        $method = $request->input('method', 'standard');
 
-        $cost = $this->checkoutService->calculateShippingCost(
-            $cart->items->toArray(),
-            $request->address ?? '',
-            $request->method ?? 'standard'
-        );
+        $cost = collect($options)->sum(function ($group) use ($method) {
+            $matched = collect($group['methods'])->firstWhere('id', $method) ?? $group['methods'][0] ?? null;
+            return $matched['cost'] ?? 0;
+        });
 
         return $this->successResponse([
-            'shipping_cost' => $cost,
+            'shipping_cost' => round((float) $cost, 2),
             'free_over'     => config('ecommerce.shipping.free_over', 1000),
         ]);
     }

@@ -22,10 +22,12 @@ class NewProductController
                 $q->whereHas('category', fn($q) => $q->where('slug', $slug)))
             ->when($request->brand, fn($q, $slug) =>
                 $q->whereHas('brand', fn($q) => $q->where('slug', $slug)))
-            ->when($request->min_price, fn($q, $p) => $q->where('sale_price', '>=', $p)
-                ->orWhere(fn($q) => $q->whereNull('sale_price')->where('price', '>=', $p)))
-            ->when($request->max_price, fn($q, $p) => $q->where('sale_price', '<=', $p)
-                ->orWhere(fn($q) => $q->whereNull('sale_price')->where('price', '<=', $p)))
+            ->when($request->min_price, fn($q, $p) => $q->where(fn($pq) =>
+                $pq->where('sale_price', '>=', $p)
+                    ->orWhere(fn($sq) => $sq->whereNull('sale_price')->where('price', '>=', $p))))
+            ->when($request->max_price, fn($q, $p) => $q->where(fn($pq) =>
+                $pq->where('sale_price', '<=', $p)
+                    ->orWhere(fn($sq) => $sq->whereNull('sale_price')->where('price', '<=', $p))))
             ->when($request->sort, function ($q, $sort) {
                 match ($sort) {
                     'price_asc'  => $q->orderBy('price'),

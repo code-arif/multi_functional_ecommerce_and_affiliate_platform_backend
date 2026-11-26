@@ -172,4 +172,34 @@ class CheckoutApiTest extends TestCase
             $this->product->fresh()->stock_quantity
         );
     }
+
+    /** @test */
+    public function checkout_ignores_manipulated_cart_item_price_and_uses_db_price(): void
+    {
+        $this->cart->items()->update(['unit_price' => 0.01, 'total_price' => 0.02]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/checkout', [
+                'shipping_address' => ['address_line' => '123 Test St', 'city' => 'Dhaka', 'country' => 'USA'],
+                'payment_method'   => 'cod',
+            ]);
+
+        $response->assertCreated();
+        $order = \Modules\Orders\Models\Order::first();
+        $this->assertEquals(200.00, (float) $order->subtotal);
+    }
+
+    /** @test */
+    public function checkout_fails_when_product_stock_is_insufficient(): void
+    {
+        $this->product->update(['stock_quantity' => 1]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/checkout', [
+                'shipping_address' => '123 Test St',
+                'payment_method'   => 'cod',
+            ]);
+
+        $response->assertStatus(400);
+    }
 }

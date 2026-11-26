@@ -35,7 +35,11 @@ class PaymentController
             return $this->errorResponse('Order is already paid.', null, 400);
         }
 
-        $payment = $this->paymentService->processPayment($order, $validated['payment_method'], $request->all());
+        if (in_array($order->status, ['cancelled', 'refunded'], true)) {
+            return $this->errorResponse('Cannot pay for a cancelled or refunded order.', null, 400);
+        }
+
+        $payment = $this->paymentService->processPayment($order, $validated['payment_method'], $validated);
 
         return $this->createdResponse(new PaymentResource($payment), 'Payment initiated.');
     }

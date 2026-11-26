@@ -22,9 +22,9 @@ class ProductController extends Controller
     public function index(Request $request): JsonResponse
     {
         $products = Product::with(['category', 'brand', 'variants'])
-            ->when($request->search, fn($q) =>
-            $q->where('name', 'like', "%{$request->search}%")
-                ->orWhere('sku', 'like', "%{$request->search}%"))
+            ->when($request->search, fn($q) => $q->where(fn($sq) =>
+                $sq->where('name', 'like', "%{$request->search}%")
+                    ->orWhere('sku', 'like', "%{$request->search}%")))
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
             ->withCount('reviews')
