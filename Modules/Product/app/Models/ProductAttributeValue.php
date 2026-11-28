@@ -8,7 +8,7 @@ use Modules\Core\Traits\HasUuid;
 class ProductAttributeValue extends Model
 {
     use HasUuid;
-    protected $fillable = ['product_attribute_id', 'value', 'sort_order'];
+    protected $fillable = ['product_attribute_id', 'value', 'color_code', 'sort_order'];
 
     public function attribute()
     {

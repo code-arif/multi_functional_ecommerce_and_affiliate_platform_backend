@@ -31,11 +31,22 @@ class UpdateProductRequest extends FormRequest
             'is_bestseller'     => 'sometimes|boolean',
             'meta_title'        => 'nullable|string|max:255',
             'meta_description'  => 'nullable|string|max:500',
-            'status'            => 'sometimes|in:active,inactive,draft',
-            'tags'              => 'nullable|array',
-            'images'            => 'nullable|array',
-            'attributes'        => 'nullable|array',
-            'variants'          => 'nullable|array',
+            'status'            => 'sometimes|in:active,inactive,draft,pending',
+            'tags'                    => 'nullable|array',
+            'images'                  => 'nullable|array',
+            'videos'                  => 'nullable|array',
+            'videos.*.id'             => 'nullable|integer',
+            'videos.*.source_type'    => 'nullable|in:upload,youtube,vimeo,external',
+            'videos.*.title'          => 'nullable|string|max:255',
+            'videos.*.video_path'     => 'nullable|string|max:500',
+            'videos.*.external_url'   => 'nullable|url|max:1000',
+            'videos.*.poster_path'    => 'nullable|string|max:500',
+            'videos.*.mime_type'      => 'nullable|string|max:100',
+            'videos.*.file_size'      => 'nullable|integer|min:0',
+            'videos.*.is_primary'     => 'boolean',
+            'videos.*.sort_order'     => 'nullable|integer|min:0',
+            'attributes'              => 'nullable|array',
+            'variants'                => 'nullable|array',
         ];
     }
 
@@ -51,7 +62,7 @@ class UpdateProductRequest extends FormRequest
         }
 
         // JSON string arrays → real arrays
-        foreach (['tags', 'attributes', 'variants', 'images'] as $field) {
+        foreach (['tags', 'attributes', 'variants', 'images', 'videos'] as $field) {
             if ($this->has($field) && is_string($this->input($field))) {
                 $decoded = json_decode($this->input($field), true);
                 if (json_last_error() === JSON_ERROR_NONE) {

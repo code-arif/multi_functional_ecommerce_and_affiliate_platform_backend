@@ -8,7 +8,7 @@ use Modules\Core\Traits\HasUuid;
 class ProductImage extends Model
 {
     use HasUuid;
-    protected $fillable = ['product_id', 'image_path', 'is_primary', 'sort_order'];
+    protected $fillable = ['product_id', 'image_path', 'alt_text', 'is_primary', 'sort_order'];
 
     protected $casts = [
         'is_primary' => 'boolean',
@@ -22,6 +22,8 @@ class ProductImage extends Model
 
     public function getImageUrlAttribute(): string
     {
-        return asset('storage/' . $this->image_path);
+        return str_starts_with($this->image_path, 'http')
+            ? $this->image_path
+            : asset('storage/' . $this->image_path);
     }
 }

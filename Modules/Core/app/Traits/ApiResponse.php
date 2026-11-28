@@ -3,6 +3,8 @@
 namespace Modules\Core\Traits;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Pagination\AbstractCursorPaginator;
 
 trait ApiResponse
 {
@@ -32,22 +34,38 @@ trait ApiResponse
         ], $statusCode);
     }
 
-    // Paginated response
+    // Paginated response (supports both LengthAwarePaginator and CursorPaginator)
     protected function paginatedResponse(
         mixed $data,
         string $message = 'Success'
     ): JsonResponse {
+        $paginator = $data instanceof ResourceCollection ? $data->resource : $data;
+
+        if ($paginator instanceof AbstractCursorPaginator) {
+            return response()->json([
+                'success'    => true,
+                'message'    => $message,
+                'data'       => $data->items(),
+                'pagination' => [
+                    'per_page'    => $paginator->perPage(),
+                    'next_cursor' => $paginator->nextCursor()?->encode(),
+                    'prev_cursor' => $paginator->previousCursor()?->encode(),
+                    'has_more'    => $paginator->hasMorePages(),
+                ],
+            ]);
+        }
+
         return response()->json([
-            'success' => true,
-            'message' => $message,
-            'data' => $data->items(),
+            'success'    => true,
+            'message'    => $message,
+            'data'       => $data->items(),
             'pagination' => [
-                'total' => $data->total(),
-                'per_page' => $data->perPage(),
+                'total'        => $data->total(),
+                'per_page'     => $data->perPage(),
                 'current_page' => $data->currentPage(),
-                'last_page' => $data->lastPage(),
-                'from' => $data->firstItem(),
-                'to' => $data->lastItem(),
+                'last_page'    => $data->lastPage(),
+                'from'         => $data->firstItem(),
+                'to'           => $data->lastItem(),
             ],
         ]);
     }

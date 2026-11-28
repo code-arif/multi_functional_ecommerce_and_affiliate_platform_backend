@@ -2,13 +2,12 @@
 
 namespace Modules\Product\Models;
 
-use Modules\Catalog\Models\Category;
+use Modules\Cart\Models\Wishlist;
 use Modules\Catalog\Models\Brand;
+use Modules\Catalog\Models\Category;
+use Modules\Catalog\Traits\HasSlug;
 use Modules\Reviews\Models\Review;
 use Modules\Orders\Models\OrderItem;
-use Modules\Catalog\Models\Wishlist;
-use Modules\Catalog\Models\VendorProductPrice;
-use Modules\Catalog\Traits\HasSlug;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -25,6 +24,38 @@ class Product extends Model
 
     protected $table = 'products';
 
+    /**
+     * Explicit lightweight columns for high-scale catalog listing queries (excludes longText/SEO blobs).
+     */
+    public const LIST_COLUMNS = [
+        'id',
+        'uuid',
+        'category_id',
+        'brand_id',
+        'name',
+        'slug',
+        'sku',
+        'type',
+        'price',
+        'sale_price',
+        'effective_price',
+        'min_price',
+        'max_price',
+        'stock_quantity',
+        'total_stock',
+        'stock_status',
+        'thumbnail',
+        'has_video',
+        'average_rating',
+        'total_reviews',
+        'total_sold',
+        'is_featured',
+        'is_new',
+        'is_bestseller',
+        'status',
+        'created_at',
+    ];
+
     protected $fillable = [
         'category_id',
         'brand_id',
@@ -35,13 +66,18 @@ class Product extends Model
         'price',
         'sale_price',
         'cost_price',
+        'effective_price',
+        'min_price',
+        'max_price',
         'stock_quantity',
+        'total_stock',
         'low_stock_threshold',
         'manage_stock',
         'stock_status',
         'short_description',
         'description',
         'thumbnail',
+        'has_video',
         'average_rating',
         'total_reviews',
         'total_sold',
@@ -62,6 +98,11 @@ class Product extends Model
         'price'               => 'decimal:2',
         'sale_price'          => 'decimal:2',
         'cost_price'          => 'decimal:2',
+        'effective_price'     => 'decimal:2',
+        'min_price'           => 'decimal:2',
+        'max_price'           => 'decimal:2',
+        'total_stock'         => 'integer',
+        'has_video'           => 'boolean',
         'average_rating'      => 'decimal:2',
         'manage_stock'        => 'boolean',
         'is_featured'         => 'boolean',
@@ -70,6 +111,19 @@ class Product extends Model
         'tags'                => 'array',
         'published_at'        => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Product $product): void {
+            if ($product->type !== 'variable') {
+                $effective = (float) ($product->sale_price ?? $product->price ?? 0);
+                $product->effective_price = $effective;
+                $product->min_price = $effective;
+                $product->max_price = $effective;
+                $product->total_stock = (int) ($product->stock_quantity ?? 0);
+            }
+        });
+    }
 
     public function category(): BelongsTo
     {
@@ -89,6 +143,16 @@ class Product extends Model
     public function primaryImage(): HasOne
     {
         return $this->hasOne(ProductImage::class)->where('is_primary', true);
+    }
+
+    public function videos(): HasMany
+    {
+        return $this->hasMany(ProductVideo::class)->orderBy('sort_order');
+    }
+
+    public function primaryVideo(): HasOne
+    {
+        return $this->hasOne(ProductVideo::class)->where('is_primary', true);
     }
 
     public function variants(): HasMany
@@ -217,6 +281,9 @@ class Product extends Model
     public function getMinVariantPriceAttribute(): ?float
     {
         if ($this->type !== 'variable') return null;
+        if (!is_null($this->attributes['min_price'] ?? null)) {
+            return (float) $this->attributes['min_price'];
+        }
         $variants = $this->relationLoaded('variants')
             ? $this->variants
             : $this->variants()->get();
@@ -228,6 +295,9 @@ class Product extends Model
     public function getMaxVariantPriceAttribute(): ?float
     {
         if ($this->type !== 'variable') return null;
+        if (!is_null($this->attributes['max_price'] ?? null)) {
+            return (float) $this->attributes['max_price'];
+        }
         $variants = $this->relationLoaded('variants')
             ? $this->variants
             : $this->variants()->get();
@@ -239,6 +309,9 @@ class Product extends Model
     public function getTotalVariantStockAttribute(): int
     {
         if ($this->type !== 'variable') return $this->stock_quantity;
+        if (array_key_exists('total_stock', $this->attributes) && ($this->attributes['total_stock'] > 0 || !$this->relationLoaded('variants'))) {
+            return (int) $this->attributes['total_stock'];
+        }
         $variants = $this->relationLoaded('variants')
             ? $this->variants
             : $this->variants()->get();
@@ -248,10 +321,39 @@ class Product extends Model
     public function getVariantIsInStockAttribute(): bool
     {
         if ($this->type !== 'variable') return $this->is_in_stock;
+        if (array_key_exists('total_stock', $this->attributes) && !$this->relationLoaded('variants')) {
+            return (int) $this->attributes['total_stock'] > 0;
+        }
         $variants = $this->relationLoaded('variants')
             ? $this->variants
             : $this->variants()->get();
         return $variants->contains(fn($v) => $v->stock_quantity > 0);
+    }
+
+    /**
+     * Recompute denormalized variant pricing and stock summaries in a single SQL aggregate.
+     */
+    public function syncVariantMetrics(): void
+    {
+        if ($this->type !== 'variable') {
+            return;
+        }
+
+        $stats = $this->variants()
+            ->selectRaw('MIN(COALESCE(sale_price, price)) as min_p, MAX(COALESCE(sale_price, price)) as max_p, COALESCE(SUM(stock_quantity), 0) as total_s')
+            ->first();
+
+        $minPrice = $stats && $stats->min_p !== null ? (float) $stats->min_p : null;
+        $maxPrice = $stats && $stats->max_p !== null ? (float) $stats->max_p : null;
+        $totalStock = (int) ($stats->total_s ?? 0);
+
+        $this->updateQuietly([
+            'min_price'       => $minPrice,
+            'max_price'       => $maxPrice,
+            'effective_price' => $minPrice ?? 0,
+            'total_stock'     => $totalStock,
+            'stock_status'    => $totalStock > 0 ? 'in_stock' : 'out_of_stock',
+        ]);
     }
 
     public function decrementStock(int $quantity): void
@@ -275,18 +377,24 @@ class Product extends Model
 
     public static function generateUniqueSlug(string $name, ?int $ignoreId = null): string
     {
-        $slug = Str::slug($name);
-        $originalSlug = $slug;
-        $count = 1;
-        while (
-            static::where('slug', $slug)
+        $baseSlug = Str::slug($name) ?: 'product';
+
+        $existing = static::withTrashed()
+            ->where('slug', 'like', $baseSlug . '%')
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
-            ->exists()
-        ) {
-            $slug = $originalSlug . '-' . $count;
+            ->pluck('slug')
+            ->flip();
+
+        if (!$existing->has($baseSlug)) {
+            return $baseSlug;
+        }
+
+        $count = 1;
+        while ($existing->has("{$baseSlug}-{$count}")) {
             $count++;
         }
-        return $slug;
+
+        return "{$baseSlug}-{$count}";
     }
 
     /**

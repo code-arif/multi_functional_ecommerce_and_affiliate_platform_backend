@@ -13,12 +13,14 @@ class ProductListResource extends JsonResource
 
         return [
             'id'                  => $this->id,
+            'uuid'                => $this->uuid,
             'name'                => $this->name,
             'slug'                => $this->slug,
             'type'                => $this->type,
             'sku'                 => $this->sku,
             'status'              => $this->status,
             'thumbnail_url'       => $this->thumbnail_url,
+            'has_video'           => (bool) $this->has_video,
             'average_rating'      => (float) $this->average_rating,
             'total_reviews'       => $this->total_reviews,
             'is_featured'         => $this->is_featured,
@@ -57,10 +59,17 @@ class ProductListResource extends JsonResource
                 'name' => $this->brand?->name,
                 'slug' => $this->brand?->slug,
             ]),
-            'primary_image'       => $this->whenLoaded('images', fn() => [
-                'url' => $this->images->where('is_primary', true)->first()?->image_url
-                    ?? $this->images->first()?->image_url,
-            ]),
+            'primary_image'       => $this->when(
+                $this->relationLoaded('primaryImage') || $this->relationLoaded('images'),
+                function () {
+                    $url = $this->relationLoaded('primaryImage')
+                        ? $this->primaryImage?->image_url
+                        : ($this->images->where('is_primary', true)->first()?->image_url
+                            ?? $this->images->first()?->image_url);
+
+                    return ['url' => $url];
+                }
+            ),
         ];
     }
 }

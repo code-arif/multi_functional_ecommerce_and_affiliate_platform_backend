@@ -11,6 +11,7 @@ class ProductResource extends JsonResource
     {
         return [
             'id'                   => $this->id,
+            'uuid'                 => $this->uuid,
             'name'                 => $this->name,
             'slug'                 => $this->slug,
             'sku'                  => $this->sku,
@@ -25,6 +26,7 @@ class ProductResource extends JsonResource
                 'max' => $this->max_variant_price,
             ] : null,
             'thumbnail_url'        => $this->thumbnail_url,
+            'has_video'            => (bool) $this->has_video,
             'short_description'    => $this->short_description,
             'description'          => $this->description,
             'stock_status'         => $this->stock_status,
@@ -70,6 +72,32 @@ class ProductResource extends JsonResource
                     'alt_text'   => $img->alt_text,
                     'is_primary' => $img->is_primary,
                     'sort_order' => $img->sort_order,
+                ])
+            ),
+            'videos'    => $this->whenLoaded(
+                'videos',
+                fn() =>
+                $this->videos->map(fn($v) => [
+                    'id'                => $v->id,
+                    'uuid'              => $v->uuid,
+                    'source_type'       => $v->source_type,
+                    'title'             => $v->title,
+                    'video_path'        => $v->video_path,
+                    'video_url'         => $v->video_url,
+                    'external_url'      => $v->external_url,
+                    'embed_id'          => $v->embed_id,
+                    'embed_url'         => $v->embed_url,
+                    'hls_url'           => $v->hls_url,
+                    'poster_path'       => $v->poster_path,
+                    'poster_url'        => $v->poster_url,
+                    'mime_type'         => $v->mime_type,
+                    'file_size'         => $v->file_size,
+                    'duration_seconds'  => $v->duration_seconds,
+                    'width'             => $v->width,
+                    'height'            => $v->height,
+                    'processing_status' => $v->processing_status,
+                    'is_primary'        => $v->is_primary,
+                    'sort_order'        => $v->sort_order,
                 ])
             ),
             'attributes' => $this->whenLoaded(

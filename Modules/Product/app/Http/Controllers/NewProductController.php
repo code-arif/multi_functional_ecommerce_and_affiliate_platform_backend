@@ -2,96 +2,64 @@
 
 namespace Modules\Product\Http\Controllers;
 
-use Modules\Product\Models\Product;;
-use Modules\Catalog\Http\Resources\ProductResource;
-use Modules\Catalog\Http\Resources\ProductListResource;
-use Modules\Reviews\Http\Resources\ReviewResource;
-use Modules\Core\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Core\Traits\ApiResponse;
+use Modules\Product\Services\ProductService;
+use Modules\Product\Transformers\ProductListResource;
+use Modules\Product\Transformers\ProductResource;
 
 class NewProductController
 {
     use ApiResponse;
 
+    public function __construct(private ProductService $productService) {}
+
     public function index(Request $request): JsonResponse
     {
-        $products = Product::active()
-            ->with(['category', 'brand', 'variants', 'primaryImage'])
-            ->when($request->category, fn($q, $slug) =>
-                $q->whereHas('category', fn($q) => $q->where('slug', $slug)))
-            ->when($request->brand, fn($q, $slug) =>
-                $q->whereHas('brand', fn($q) => $q->where('slug', $slug)))
-            ->when($request->min_price, fn($q, $p) => $q->where(fn($pq) =>
-                $pq->where('sale_price', '>=', $p)
-                    ->orWhere(fn($sq) => $sq->whereNull('sale_price')->where('price', '>=', $p))))
-            ->when($request->max_price, fn($q, $p) => $q->where(fn($pq) =>
-                $pq->where('sale_price', '<=', $p)
-                    ->orWhere(fn($sq) => $sq->whereNull('sale_price')->where('price', '<=', $p))))
-            ->when($request->sort, function ($q, $sort) {
-                match ($sort) {
-                    'price_asc'  => $q->orderBy('price'),
-                    'price_desc' => $q->orderByDesc('price'),
-                    'newest'     => $q->latest(),
-                    'popular'    => $q->orderByDesc('total_sold'),
-                    'rating'     => $q->orderByDesc('average_rating'),
-                    default      => $q->latest(),
-                };
-            }, fn($q) => $q->latest())
-            ->paginate($request->per_page ?? config('ecommerce.pagination.products_per_page', 20));
+        $filters = $request->only([
+            'category', 'brand', 'min_price', 'max_price',
+            'rating', 'search', 'sort', 'per_page',
+            'featured', 'new', 'in_stock', 'cursor', 'pagination',
+        ]);
+
+        $products = $this->productService->getProducts($filters);
 
         return $this->paginatedResponse(ProductListResource::collection($products));
     }
 
     public function show(string $slug): JsonResponse
     {
-        $product = Product::active()
-            ->with(['images', 'variants', 'attributes.values', 'category', 'brand', 'reviews.user'])
-            ->where('slug', $slug)
-            ->firstOrFail();
+        $product = $this->productService->getBySlug($slug);
 
         return $this->successResponse(new ProductResource($product));
     }
 
     public function featured(Request $request): JsonResponse
     {
-        $products = Product::featured()
-            ->with(['category', 'primaryImage'])
-            ->limit($request->limit ?? 10)
-            ->get();
+        $products = $this->productService->getFeatured(min((int) ($request->limit ?? 10), 50));
 
         return $this->successResponse(ProductListResource::collection($products));
     }
 
     public function newArrivals(Request $request): JsonResponse
     {
-        $products = Product::new()
-            ->with(['category', 'primaryImage'])
-            ->limit($request->limit ?? 10)
-            ->get();
+        $products = $this->productService->getNew(min((int) ($request->limit ?? 10), 50));
 
         return $this->successResponse(ProductListResource::collection($products));
     }
 
     public function bestsellers(Request $request): JsonResponse
     {
-        $products = Product::bestseller()
-            ->with(['category', 'primaryImage'])
-            ->limit($request->limit ?? 10)
-            ->get();
+        $products = $this->productService->getBestsellers(min((int) ($request->limit ?? 10), 50));
 
         return $this->successResponse(ProductListResource::collection($products));
     }
 
     public function related(string $slug, Request $request): JsonResponse
     {
-        $product = Product::where('slug', $slug)->firstOrFail();
-        $related = Product::active()
-            ->where('category_id', $product->category_id)
-            ->where('id', '!=', $product->id)
-            ->with(['category', 'primaryImage'])
-            ->limit($request->limit ?? 8)
-            ->get();
+        $product = $this->productService->getBySlug($slug);
+        $related = $this->productService->getRelated($product, min((int) ($request->limit ?? 8), 24));
 
         return $this->successResponse(ProductListResource::collection($related));
     }

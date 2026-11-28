@@ -21,15 +21,22 @@ class ProductController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $products = Product::with(['category', 'brand', 'variants'])
-            ->when($request->search, fn($q) => $q->where(fn($sq) =>
-                $sq->where('name', 'like', "%{$request->search}%")
-                    ->orWhere('sku', 'like', "%{$request->search}%")))
+        $products = Product::select(Product::LIST_COLUMNS)
+            ->with([
+                'category:id,uuid,name,slug',
+                'brand:id,uuid,name,slug',
+                'primaryImage:id,product_id,image_path,is_primary',
+            ])
+            ->when($request->search, function ($q) use ($request) {
+                $term = trim((string) $request->search);
+                $q->where(fn($sq) =>
+                    $sq->where('name', 'like', "%{$term}%")
+                        ->orWhere('sku', 'like', "{$term}%"));
+            })
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
-            ->withCount('reviews')
-            ->orderBy('created_at', 'desc')
-            ->paginate($request->per_page ?? 20);
+            ->orderByDesc('created_at')
+            ->paginate(min((int) ($request->per_page ?? 20), 100));
 
         return $this->paginatedResponse(
             ProductListResource::collection($products)
@@ -54,7 +61,7 @@ class ProductController extends Controller
 
     public function show(Product $product): JsonResponse
     {
-        $product->load(['images', 'variants', 'attributes.values', 'category', 'brand', 'reviews.user']);
+        $product->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand']);
         return $this->successResponse(new ProductResource($product));
     }
 
@@ -105,5 +112,16 @@ class ProductController extends Controller
         }
 
         return response()->json(['message' => 'No file provided.'], 422);
+    }
+
+    /**
+     * POST /api/v1/admin/products/upload-video
+     * Upload a product video file and optional poster image.
+     */
+    public function uploadVideo(Request $request): JsonResponse
+    {
+        $payload = $this->productService->handleVideoUpload($request);
+
+        return $this->successResponse($payload, 'Video uploaded.');
     }
 }

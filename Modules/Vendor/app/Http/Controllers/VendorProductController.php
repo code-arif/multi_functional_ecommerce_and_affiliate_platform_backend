@@ -65,6 +65,13 @@ class VendorProductController
     {
         $vendor = $request->user()->vendor;
 
+        if ($request->has('videos') && is_string($request->input('videos'))) {
+            $decodedVideos = json_decode($request->input('videos'), true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $request->merge(['videos' => $decodedVideos]);
+            }
+        }
+
         $validated = $request->validate([
             'product_uuid' => 'nullable|exists:products,uuid',
             'name'        => 'required_without:product_uuid|string|max:255',
@@ -77,10 +84,20 @@ class VendorProductController
             'short_description' => 'nullable|string',
             'description' => 'nullable|string',
             'thumbnail'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status'      => 'nullable|in:active,inactive,draft',
+            'status'      => 'nullable|in:active,inactive,draft,pending',
             'low_stock_threshold' => 'nullable|integer|min:0',
             'manage_stock' => 'nullable|boolean',
             'is_active'    => 'nullable|boolean',
+            'videos'                  => 'nullable|array',
+            'videos.*.source_type'    => 'nullable|in:upload,youtube,vimeo,external',
+            'videos.*.title'          => 'nullable|string|max:255',
+            'videos.*.video_path'     => 'nullable|string|max:500',
+            'videos.*.external_url'   => 'nullable|url|max:1000',
+            'videos.*.poster_path'    => 'nullable|string|max:500',
+            'videos.*.mime_type'      => 'nullable|string|max:100',
+            'videos.*.file_size'      => 'nullable|integer|min:0',
+            'videos.*.is_primary'     => 'boolean',
+            'videos.*.sort_order'     => 'nullable|integer|min:0',
         ]);
 
         // Map uuid references to internal ids
@@ -158,7 +175,7 @@ class VendorProductController
             ->where('product_id', $product->id)
             ->firstOrFail();
 
-        $product->load(['images', 'variants', 'attributes.values', 'category', 'brand']);
+        $product->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand']);
 
         $data = (new ProductResource($product))->toArray($request);
         $data['vendor_pricing'] = $vendorPrice->only([
@@ -215,5 +232,16 @@ class VendorProductController
         $vendorPrice->update(['is_active' => false]);
 
         return $this->successResponse(null, 'Product removed from your shop.');
+    }
+
+    /**
+     * POST /api/v1/vendor/products/upload-video
+     * Upload a product video file and optional poster image for a vendor product.
+     */
+    public function uploadVideo(Request $request): JsonResponse
+    {
+        $payload = $this->productService->handleVideoUpload($request);
+
+        return $this->successResponse($payload, 'Video uploaded.');
     }
 }
