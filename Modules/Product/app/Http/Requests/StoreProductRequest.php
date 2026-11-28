@@ -17,6 +17,8 @@ class StoreProductRequest extends FormRequest
             'name'                => 'required|string|max:255',
             'category_id'         => 'nullable|exists:categories,id',
             'brand_id'            => 'nullable|exists:brands,id',
+            'vendor_uuid'         => 'nullable|exists:vendors,uuid',
+            'vendor_id'           => 'nullable|exists:vendors,id',
             'type'                => 'required|in:simple,variable,affiliate',
             'sku'                 => 'nullable|string|unique:products,sku',
             'price'               => 'required_if:type,simple|numeric|min:0',
@@ -85,6 +87,13 @@ class StoreProductRequest extends FormRequest
                 if (json_last_error() === JSON_ERROR_NONE) {
                     $casts[$field] = $decoded;
                 }
+            }
+        }
+
+        // Empty strings from multipart FormData → null for nullable foreign keys
+        foreach (['vendor_uuid', 'vendor_id', 'category_id', 'brand_id'] as $field) {
+            if ($this->has($field) && $this->input($field) === '') {
+                $casts[$field] = null;
             }
         }
 

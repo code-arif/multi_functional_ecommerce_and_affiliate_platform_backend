@@ -2,12 +2,14 @@
 
 namespace Modules\Product\Models;
 
+use App\Models\User;
 use Modules\Cart\Models\Wishlist;
 use Modules\Catalog\Models\Brand;
 use Modules\Catalog\Models\Category;
 use Modules\Catalog\Traits\HasSlug;
 use Modules\Reviews\Models\Review;
 use Modules\Orders\Models\OrderItem;
+use Modules\Vendor\Models\Vendor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -32,6 +34,7 @@ class Product extends Model
         'uuid',
         'category_id',
         'brand_id',
+        'vendor_id',
         'name',
         'slug',
         'sku',
@@ -59,6 +62,9 @@ class Product extends Model
     protected $fillable = [
         'category_id',
         'brand_id',
+        'vendor_id',
+        'created_by',
+        'updated_by',
         'name',
         'slug',
         'sku',
@@ -95,6 +101,9 @@ class Product extends Model
     ];
 
     protected $casts = [
+        'vendor_id'           => 'integer',
+        'created_by'          => 'integer',
+        'updated_by'          => 'integer',
         'price'               => 'decimal:2',
         'sale_price'          => 'decimal:2',
         'cost_price'          => 'decimal:2',
@@ -114,6 +123,19 @@ class Product extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Product $product): void {
+            if (auth()->check()) {
+                $product->created_by ??= auth()->id();
+                $product->updated_by ??= auth()->id();
+            }
+        });
+
+        static::updating(function (Product $product): void {
+            if (auth()->check()) {
+                $product->updated_by = auth()->id();
+            }
+        });
+
         static::saving(function (Product $product): void {
             if ($product->type !== 'variable') {
                 $effective = (float) ($product->sale_price ?? $product->price ?? 0);
@@ -133,6 +155,21 @@ class Product extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     public function images(): HasMany
@@ -198,9 +235,29 @@ class Product extends Model
      */
     public function vendors(): BelongsToMany
     {
-        return $this->belongsToMany(\Modules\Vendor\Models\Vendor::class, 'vendor_product_prices')
+        return $this->belongsToMany(Vendor::class, 'vendor_product_prices')
             ->withPivot(['price', 'sale_price', 'stock_quantity', 'is_active'])
             ->wherePivot('is_active', true);
+    }
+
+    public function isPlatformProduct(): bool
+    {
+        return is_null($this->vendor_id);
+    }
+
+    public function isOwnedByVendor(?int $vendorId): bool
+    {
+        return !is_null($vendorId) && (int) $this->vendor_id === $vendorId;
+    }
+
+    public function scopePlatform($query)
+    {
+        return $query->whereNull('vendor_id');
+    }
+
+    public function scopeOwnedByVendor($query, int $vendorId)
+    {
+        return $query->where('vendor_id', $vendorId);
     }
 
     public function scopeActive($query)

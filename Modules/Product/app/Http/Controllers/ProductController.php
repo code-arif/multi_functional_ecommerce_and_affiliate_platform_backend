@@ -12,6 +12,7 @@ use Modules\Product\Models\Product;
 use Modules\Product\Services\ProductService;
 use Modules\Product\Transformers\ProductListResource;
 use Modules\Product\Transformers\ProductResource;
+use Modules\Vendor\Models\Vendor;
 
 class ProductController extends Controller
 {
@@ -25,6 +26,7 @@ class ProductController extends Controller
             ->with([
                 'category:id,uuid,name,slug',
                 'brand:id,uuid,name,slug',
+                'vendor:id,uuid,shop_name,slug',
                 'primaryImage:id,product_id,image_path,is_primary',
             ])
             ->when($request->search, function ($q) use ($request) {
@@ -35,6 +37,12 @@ class ProductController extends Controller
             })
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
+            ->when($request->owner_type === 'platform', fn($q) => $q->whereNull('vendor_id'))
+            ->when($request->owner_type === 'vendor', fn($q) => $q->whereNotNull('vendor_id'))
+            ->when($request->vendor_uuid, function ($q) use ($request) {
+                $vendorId = Vendor::where('uuid', $request->vendor_uuid)->value('id');
+                $vendorId ? $q->where('vendor_id', $vendorId) : $q->whereRaw('1 = 0');
+            })
             ->orderByDesc('created_at')
             ->paginate(min((int) ($request->per_page ?? 20), 100));
 
@@ -61,21 +69,57 @@ class ProductController extends Controller
 
     public function show(Product $product): JsonResponse
     {
-        $product->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand']);
+        $product->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand', 'vendor', 'creator', 'updater']);
         return $this->successResponse(new ProductResource($product));
     }
 
     public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
+        $previousStatus = $product->status;
         $data = $request->validated();
 
         if ($request->hasFile('thumbnail')) {
             $data['thumbnail'] = $this->productService->uploadThumbnail($request->file('thumbnail'));
         }
 
+        if (($data['status'] ?? null) === 'active' && is_null($product->published_at)) {
+            $data['published_at'] = now();
+        }
+
         $product = $this->productService->updateProduct($product, $data);
 
+        if (isset($data['status']) && $data['status'] !== $previousStatus) {
+            $this->productService->notifyVendorStatusChange(
+                $product,
+                $data['status'],
+                $request->input('reason')
+            );
+        }
+
         return $this->successResponse(new ProductResource($product), 'Product updated successfully.');
+    }
+
+    /**
+     * PATCH /api/v1/admin/products/{product}/status
+     * Quickly update a product's publish status from the admin products table.
+     */
+    public function updateStatus(Request $request, Product $product): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:active,inactive,draft,pending',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $product = $this->productService->updateStatus(
+            $product,
+            $validated['status'],
+            $validated['reason'] ?? null
+        );
+
+        return $this->successResponse(
+            new ProductResource($product),
+            "Product status updated to {$validated['status']}."
+        );
     }
 
     public function destroy(Product $product): JsonResponse
@@ -90,28 +134,9 @@ class ProductController extends Controller
      */
     public function uploadImage(Request $request): JsonResponse
     {
-        $request->validate([
-            'image'     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
-            'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-        ]);
+        $payload = $this->productService->handleImageUpload($request);
 
-        if ($request->hasFile('thumbnail')) {
-            $path = $this->productService->uploadThumbnail($request->file('thumbnail'));
-            return $this->successResponse([
-                'path' => $path,
-                'url'  => asset('storage/' . $path),
-            ], 'Thumbnail uploaded.');
-        }
-
-        if ($request->hasFile('image')) {
-            $path = $this->productService->uploadImage($request->file('image'));
-            return $this->successResponse([
-                'path' => $path,
-                'url'  => asset('storage/' . $path),
-            ], 'Image uploaded.');
-        }
-
-        return response()->json(['message' => 'No file provided.'], 422);
+        return $this->successResponse($payload, 'Image uploaded.');
     }
 
     /**

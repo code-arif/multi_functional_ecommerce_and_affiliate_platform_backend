@@ -6,9 +6,12 @@ use Illuminate\Cache\TaggableStore;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Modules\Catalog\Models\Brand;
 use Modules\Catalog\Models\Category;
+use Modules\Notifications\Notifications\ProductStatusNotification;
+use Modules\Product\Emails\ProductStatusVendorMail;
 use Modules\Product\Jobs\ProcessProductVideoJob;
 use Modules\Product\Models\Product;
 use Modules\Product\Models\ProductAttribute;
@@ -16,6 +19,8 @@ use Modules\Product\Models\ProductAttributeValue;
 use Modules\Product\Models\ProductImage;
 use Modules\Product\Models\ProductVariant;
 use Modules\Product\Models\ProductVideo;
+use Modules\Product\Models\VendorProductPrice;
+use Modules\Vendor\Models\Vendor;
 
 class ProductService
 {
@@ -27,7 +32,7 @@ class ProductService
         return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($filters) {
             $query = Product::active()
                 ->select(Product::LIST_COLUMNS)
-                ->with(['category:id,uuid,name,slug', 'brand:id,uuid,name,slug', 'primaryImage:id,product_id,image_path,is_primary'])
+                ->with(['category:id,uuid,name,slug', 'brand:id,uuid,name,slug', 'vendor:id,uuid,shop_name,slug', 'primaryImage:id,product_id,image_path,is_primary'])
                 ->when($filters['category'] ?? null, function ($q, $slug) {
                     $categoryId = Category::where('slug', $slug)->value('id');
                     return $categoryId ? $q->where('category_id', $categoryId) : $q->whereRaw('1 = 0');
@@ -74,7 +79,7 @@ class ProductService
     {
         return Cache::remember("product_{$slug}", now()->addMinutes(30), function () use ($slug) {
             return Product::active()
-                ->with(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand'])
+                ->with(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand', 'vendor:id,uuid,shop_name,slug'])
                 ->where('slug', $slug)
                 ->firstOrFail();
         });
@@ -157,6 +162,8 @@ class ProductService
     public function createProduct(array $data): Product
     {
         return DB::transaction(function () use ($data) {
+            $data = $this->resolveVendorOwnership($data);
+
             if (empty($data['slug']) && !empty($data['name'])) {
                 $data['slug'] = Product::generateUniqueSlug($data['name']);
             }
@@ -182,6 +189,8 @@ class ProductService
                 $this->syncVariants($product, $data['variants']);
             }
 
+            $this->syncOwnerVendorPrice($product);
+
             $this->clearProductCache();
 
             Log::channel('admin_actions')->info('Product created', [
@@ -189,13 +198,15 @@ class ProductService
                 'name'       => $product->name,
             ]);
 
-            return $product->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand']);
+            return $product->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand', 'vendor', 'creator', 'updater']);
         });
     }
 
     public function updateProduct(Product $product, array $data): Product
     {
         return DB::transaction(function () use ($product, $data) {
+            $data = $this->resolveVendorOwnership($data);
+
             // If name changed and slug is being reset
             if (isset($data['name']) && empty($data['slug'])) {
                 $data['slug'] = Product::generateUniqueSlug($data['name'], $product->id);
@@ -220,10 +231,122 @@ class ProductService
                 }
             }
 
+            $this->syncOwnerVendorPrice($product);
+
             $this->clearProductCache($product->slug);
 
-            return $product->fresh()->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand']);
+            return $product->fresh()->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand', 'vendor', 'creator', 'updater']);
         });
+    }
+
+    private function resolveVendorOwnership(array $data): array
+    {
+        if (array_key_exists('vendor_uuid', $data)) {
+            if (!array_key_exists('vendor_id', $data)) {
+                $data['vendor_id'] = !empty($data['vendor_uuid'])
+                    ? Vendor::findByUuidOrFail($data['vendor_uuid'])->id
+                    : null;
+            }
+            unset($data['vendor_uuid']);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Ensure an admin-assigned vendor owner has a matching vendor_product_prices entry
+     * so storefront & vendor shop queries stay consistent immediately on creation.
+     */
+    private function syncOwnerVendorPrice(Product $product): void
+    {
+        if (is_null($product->vendor_id)) {
+            return;
+        }
+
+        $fresh = $product->fresh() ?? $product;
+
+        VendorProductPrice::firstOrCreate(
+            [
+                'vendor_id'  => $fresh->vendor_id,
+                'product_id' => $fresh->id,
+            ],
+            [
+                'price'               => $fresh->price ?? $fresh->min_price ?? 0,
+                'sale_price'          => $fresh->sale_price,
+                'stock_quantity'      => $fresh->total_stock ?? $fresh->stock_quantity ?? 0,
+                'low_stock_threshold' => $fresh->low_stock_threshold ?? 5,
+                'manage_stock'        => $fresh->manage_stock ?? true,
+                'is_active'           => true,
+            ]
+        );
+    }
+
+    /**
+     * Update a product's publish status and notify owning vendor (in-app + email).
+     */
+    public function updateStatus(Product $product, string $status, ?string $reason = null): Product
+    {
+        $previousStatus = $product->status;
+
+        $payload = ['status' => $status];
+        if ($status === 'active' && is_null($product->published_at)) {
+            $payload['published_at'] = now();
+        }
+
+        $product->update($payload);
+        $this->clearProductCache($product->slug);
+
+        $fresh = $product->fresh()->load(['images', 'videos', 'variants', 'attributes.values', 'category', 'brand', 'vendor', 'creator', 'updater']);
+
+        if ($previousStatus !== $status) {
+            $this->notifyVendorStatusChange($fresh, $status, $reason);
+        }
+
+        return $fresh;
+    }
+
+    /**
+     * Send in-app + queued email notification to a vendor when their product status changes.
+     */
+    public function notifyVendorStatusChange(Product $product, string $status, ?string $reason = null): void
+    {
+        if (is_null($product->vendor_id)) {
+            return;
+        }
+
+        $product->loadMissing(['vendor.user', 'category', 'brand']);
+        $vendor = $product->vendor;
+        if (!$vendor) {
+            return;
+        }
+
+        $vendorUser = $vendor->user;
+
+        try {
+            if ($vendorUser) {
+                $vendorUser->notify(new ProductStatusNotification($product, $status, $reason));
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Failed to create vendor product status notification: ' . $e->getMessage(), [
+                'product_id' => $product->id,
+                'vendor_id'  => $vendor->id,
+            ]);
+        }
+
+        try {
+            $recipientEmail = $vendor->email ?: $vendorUser?->email;
+            if ($recipientEmail) {
+                Mail::to($recipientEmail)->later(
+                    now()->addSeconds(3),
+                    new ProductStatusVendorMail($product, $vendor, $status, $reason)
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Failed to queue vendor product status email: ' . $e->getMessage(), [
+                'product_id' => $product->id,
+                'vendor_id'  => $vendor->id,
+            ]);
+        }
     }
 
     public function deleteProduct(Product $product): void
@@ -241,6 +364,35 @@ class ProductService
     public function uploadImage($file): string
     {
         return $file->store('products/images', 'public');
+    }
+
+    /**
+     * Handle multipart image or thumbnail upload for admin and vendor controllers.
+     */
+    public function handleImageUpload(\Illuminate\Http\Request $request): array
+    {
+        $request->validate([
+            'image'     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'thumbnail' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        if ($request->hasFile('thumbnail')) {
+            $path = $this->uploadThumbnail($request->file('thumbnail'));
+            return [
+                'path' => $path,
+                'url'  => asset('storage/' . $path),
+            ];
+        }
+
+        if ($request->hasFile('image')) {
+            $path = $this->uploadImage($request->file('image'));
+            return [
+                'path' => $path,
+                'url'  => asset('storage/' . $path),
+            ];
+        }
+
+        abort(422, 'No file provided.');
     }
 
     public function uploadVideo($file): string
@@ -332,17 +484,13 @@ class ProductService
 
         $existingIds = $product->images()->pluck('id')->toArray();
 
-        $hasExistingInPayload = collect($images)->contains(fn($img) => !empty($img['id']));
+        $toDelete = $product->images()
+            ->when(!empty($keepIds), fn($q) => $q->whereNotIn('id', $keepIds))
+            ->get();
 
-        if ($hasExistingInPayload || !empty($keepIds)) {
-            $toDelete = $product->images()
-                ->whereNotIn('id', $keepIds)
-                ->get();
-
-            foreach ($toDelete as $img) {
-                Storage::disk('public')->delete($img->image_path);
-                $img->delete();
-            }
+        foreach ($toDelete as $img) {
+            Storage::disk('public')->delete($img->image_path);
+            $img->delete();
         }
 
         // Insert/Update

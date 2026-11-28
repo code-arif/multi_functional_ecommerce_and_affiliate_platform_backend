@@ -19,6 +19,7 @@ class ProductListResource extends JsonResource
             'type'                => $this->type,
             'sku'                 => $this->sku,
             'status'              => $this->status,
+            'owner_type'          => $this->vendor_id ? 'vendor' : 'platform',
             'thumbnail_url'       => $this->thumbnail_url,
             'has_video'           => (bool) $this->has_video,
             'average_rating'      => (float) $this->average_rating,
@@ -59,6 +60,11 @@ class ProductListResource extends JsonResource
                 'name' => $this->brand?->name,
                 'slug' => $this->brand?->slug,
             ]),
+            'vendor'              => $this->whenLoaded('vendor', fn() => $this->vendor ? [
+                'uuid'      => $this->vendor->uuid,
+                'shop_name' => $this->vendor->shop_name,
+                'slug'      => $this->vendor->slug,
+            ] : null),
             'primary_image'       => $this->when(
                 $this->relationLoaded('primaryImage') || $this->relationLoaded('images'),
                 function () {

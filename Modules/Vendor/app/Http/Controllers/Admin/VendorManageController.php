@@ -80,7 +80,12 @@ class VendorManageController extends Controller
             ])
             ->withSum('orders', 'total_amount')
             ->when($request->status, fn($q, $s) => $q->where('status', $s))
-            ->when($request->search, fn($q, $s) => $q->where('shop_name', 'like', "%{$s}%"))
+            ->when($request->search, fn($q, $s) => $q->where(function ($sq) use ($s) {
+                $sq->where('shop_name', 'like', "%{$s}%")
+                    ->orWhere('email', 'like', "%{$s}%")
+                    ->orWhere('phone', 'like', "%{$s}%")
+                    ->orWhereHas('user', fn($uq) => $uq->where('name', 'like', "%{$s}%"));
+            }))
             ->when($request->date_from, fn($q, $d) => $q->whereDate('created_at', '>=', $d))
             ->when($request->date_to, fn($q, $d) => $q->whereDate('created_at', '<=', $d))
             ->when($request->sort === 'oldest', fn($q) => $q->oldest(), fn($q) => $request->sort === 'name' ? $q->orderBy('shop_name') : $q->latest())
@@ -199,7 +204,12 @@ class VendorManageController extends Controller
             ])
             ->withSum('orders', 'total_amount')
             ->pending()
-            ->when($request->search, fn($q, $s) => $q->where('shop_name', 'like', "%{$s}%"))
+            ->when($request->search, fn($q, $s) => $q->where(function ($sq) use ($s) {
+                $sq->where('shop_name', 'like', "%{$s}%")
+                    ->orWhere('email', 'like', "%{$s}%")
+                    ->orWhere('phone', 'like', "%{$s}%")
+                    ->orWhereHas('user', fn($uq) => $uq->where('name', 'like', "%{$s}%"));
+            }))
             ->latest()
             ->paginate($request->per_page ?? 20);
 

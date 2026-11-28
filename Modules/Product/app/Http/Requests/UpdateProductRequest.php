@@ -17,6 +17,8 @@ class UpdateProductRequest extends FormRequest
             'name'              => 'sometimes|string|max:255',
             'category_id'       => 'nullable|exists:categories,id',
             'brand_id'          => 'nullable|exists:brands,id',
+            'vendor_uuid'       => 'nullable|exists:vendors,uuid',
+            'vendor_id'         => 'nullable|exists:vendors,id',
             'sku'               => "nullable|string|unique:products,sku,{$productId}",
             'price'             => 'sometimes|numeric|min:0',
             'sale_price'        => 'nullable|numeric|min:0',
@@ -68,6 +70,13 @@ class UpdateProductRequest extends FormRequest
                 if (json_last_error() === JSON_ERROR_NONE) {
                     $casts[$field] = $decoded;
                 }
+            }
+        }
+
+        // Empty strings from multipart FormData → null for nullable foreign keys
+        foreach (['vendor_uuid', 'vendor_id', 'category_id', 'brand_id'] as $field) {
+            if ($this->has($field) && $this->input($field) === '') {
+                $casts[$field] = null;
             }
         }
 

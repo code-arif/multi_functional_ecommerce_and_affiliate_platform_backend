@@ -46,8 +46,12 @@ class ProductResource extends JsonResource
             'meta_description'     => $this->meta_description,
             'meta_keywords'        => $this->meta_keywords,
             'status'               => $this->status,
+            'owner_type'           => $this->vendor_id ? 'vendor' : 'platform',
+            'created_by'           => $this->created_by,
+            'updated_by'           => $this->updated_by,
             'published_at'         => $this->published_at?->toDateTimeString(),
             'created_at'           => $this->created_at?->toDateTimeString(),
+            'updated_at'           => $this->updated_at?->toDateTimeString(),
 
             // Relationships
             'category'  => $this->whenLoaded('category', fn() => [
@@ -63,11 +67,27 @@ class ProductResource extends JsonResource
                 'slug'     => $this->brand->slug,
                 'logo_url' => $this->brand->logo_url,
             ]),
+            'vendor'    => $this->whenLoaded('vendor', fn() => $this->vendor ? [
+                'uuid'      => $this->vendor->uuid,
+                'shop_name' => $this->vendor->shop_name,
+                'slug'      => $this->vendor->slug,
+            ] : null),
+            'creator'   => $this->whenLoaded('creator', fn() => $this->creator ? [
+                'id'    => $this->creator->id,
+                'name'  => $this->creator->name,
+                'email' => $this->creator->email,
+            ] : null),
+            'updater'   => $this->whenLoaded('updater', fn() => $this->updater ? [
+                'id'    => $this->updater->id,
+                'name'  => $this->updater->name,
+                'email' => $this->updater->email,
+            ] : null),
             'images'    => $this->whenLoaded(
                 'images',
                 fn() =>
                 $this->images->map(fn($img) => [
                     'id'         => $img->id,
+                    'image_path' => $img->image_path,
                     'url'        => $img->image_url,
                     'alt_text'   => $img->alt_text,
                     'is_primary' => $img->is_primary,
