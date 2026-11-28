@@ -17,6 +17,8 @@ Route::prefix('v1')->group(function () {
     // Categories
     Route::prefix('categories')->middleware('throttle:api')->group(function () {
         Route::get('/', [CategoryController::class, 'index']);
+        Route::get('navigation', [CategoryController::class, 'navigation']);
+        Route::get('popular', [CategoryController::class, 'popular']);
         Route::get('{slug}', [CategoryController::class, 'show']);
     });
 

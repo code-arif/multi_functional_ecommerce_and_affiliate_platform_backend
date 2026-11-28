@@ -55,8 +55,11 @@ class CategoryResource extends JsonResource
                 'price' => $p->price,
                 'sale_price' => $p->sale_price,
             ])),
-            'children' => $this->whenLoaded('allChildren',
-                fn() => CategoryResource::collection($this->allChildren)
+            'children' => $this->when(
+                $this->relationLoaded('allChildren') || $this->relationLoaded('children'),
+                fn() => CategoryResource::collection(
+                    $this->relationLoaded('allChildren') ? $this->allChildren : $this->children
+                )
             ),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

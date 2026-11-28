@@ -11,6 +11,8 @@ use Modules\Notifications\Notifications\BrandProposedNotification;
 use Modules\Notifications\Notifications\BrandStatusNotification;
 use Modules\Notifications\Notifications\CategoryProposedNotification;
 use Modules\Notifications\Notifications\CategoryStatusNotification;
+use Modules\Orders\Models\Order;
+use Modules\Orders\Models\OrderItem;
 use Modules\Product\Models\Product;
 use Modules\RBAC\Database\Seeders\RBACSeeder;
 use Modules\Vendor\Models\Vendor;
@@ -64,13 +66,139 @@ class CatalogApiTest extends TestCase
     /** @test */
     public function guest_can_list_categories(): void
     {
+        $child = Category::factory()->create([
+            'parent_id' => $this->category->id,
+            'name'      => 'Laptops',
+            'slug'      => 'laptops',
+            'is_active' => true,
+            'status'    => 'approved',
+        ]);
+
+        Category::factory()->create([
+            'parent_id' => $this->category->id,
+            'name'      => 'Pending Child',
+            'slug'      => 'pending-child',
+            'is_active' => true,
+            'status'    => 'pending',
+        ]);
+
+        Category::factory()->create([
+            'name'      => 'Pending Root',
+            'slug'      => 'pending-root',
+            'is_active' => true,
+            'status'    => 'pending',
+        ]);
+
         $response = $this->getJson('/api/v1/categories');
 
         $response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonCount(1, 'data.0.children')
+            ->assertJsonPath('data.0.children.0.uuid', $child->uuid)
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    '*' => ['uuid', 'name', 'slug'],
+                    '*' => ['uuid', 'name', 'slug', 'children'],
+                ],
+            ]);
+
+        // Dedicated lightweight navigation endpoint returns only nav fields
+        $navResponse = $this->getJson('/api/v1/categories/navigation');
+
+        $navResponse->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonCount(1, 'data.0.children')
+            ->assertJsonPath('data.0.children.0.uuid', $child->uuid)
+            ->assertJsonMissingPath('data.0.banner_url')
+            ->assertJsonMissingPath('data.0.meta_title')
+            ->assertJsonMissingPath('data.0.created_by')
+            ->assertJsonMissingPath('data.0.children.0.banner_url')
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    '*' => [
+                        'uuid',
+                        'name',
+                        'slug',
+                        'icon',
+                        'children' => [
+                            '*' => ['uuid', 'name', 'slug', 'icon'],
+                        ],
+                    ],
+                ],
+            ]);
+    }
+
+    /** @test */
+    public function guest_can_list_top_16_popular_categories_ordered_by_max_orders(): void
+    {
+        // Create 17 extra approved active categories (18 total with $this->category)
+        $createdCategories = [];
+        for ($i = 1; $i <= 17; $i++) {
+            $createdCategories[] = Category::factory()->create([
+                'name'       => "Popular Cat {$i}",
+                'slug'       => "popular-cat-{$i}",
+                'is_active'  => true,
+                'status'     => 'approved',
+                'sort_order' => $i,
+            ]);
+        }
+
+        // Hidden / pending categories must never be returned
+        Category::factory()->create(['name' => 'Inactive Cat', 'slug' => 'inactive-cat', 'is_active' => false, 'status' => 'approved']);
+        Category::factory()->create(['name' => 'Pending Cat', 'slug' => 'pending-cat', 'is_active' => true, 'status' => 'pending']);
+
+        $topCategory = $createdCategories[4];
+        $secondCategory = $createdCategories[9];
+
+        $topProduct = Product::factory()->create(['category_id' => $topCategory->id, 'status' => 'active', 'slug' => 'top-prod']);
+        $secondProduct = Product::factory()->create(['category_id' => $secondCategory->id, 'status' => 'active', 'slug' => 'second-prod']);
+
+        $createOrder = function (Product $prod, string $status = 'delivered', int $seq = 1): void {
+            $order = Order::create([
+                'order_number'          => "ORD-POP-{$prod->id}-{$seq}",
+                'user_id'               => $this->user->id,
+                'status'                => $status,
+                'subtotal'              => 100,
+                'total_amount'          => 100,
+                'shipping_name'         => 'Customer',
+                'shipping_phone'        => '01700000000',
+                'shipping_address_line1'=> 'Road 1',
+                'shipping_city'         => 'Dhaka',
+            ]);
+            OrderItem::create([
+                'order_id'     => $order->id,
+                'product_id'   => $prod->id,
+                'product_name' => $prod->name,
+                'unit_price'   => 100,
+                'quantity'     => 1,
+                'subtotal'     => 100,
+            ]);
+        };
+
+        // 3 valid orders for topCategory, 2 valid + 1 cancelled for secondCategory
+        $createOrder($topProduct, 'delivered', 1);
+        $createOrder($topProduct, 'confirmed', 2);
+        $createOrder($topProduct, 'pending', 3);
+
+        $createOrder($secondProduct, 'delivered', 4);
+        $createOrder($secondProduct, 'processing', 5);
+        $createOrder($secondProduct, 'cancelled', 6);
+
+        $res = $this->getJson('/api/v1/categories/popular');
+
+        $res->assertOk()
+            ->assertJsonCount(16, 'data')
+            ->assertJsonPath('data.0.uuid', $topCategory->uuid)
+            ->assertJsonPath('data.0.orders_count', 3)
+            ->assertJsonPath('data.1.uuid', $secondCategory->uuid)
+            ->assertJsonPath('data.1.orders_count', 2)
+            ->assertJsonMissingPath('data.0.banner_url')
+            ->assertJsonMissingPath('data.0.meta_title')
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    '*' => ['uuid', 'name', 'slug', 'image_url', 'icon', 'orders_count'],
                 ],
             ]);
     }
