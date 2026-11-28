@@ -226,6 +226,73 @@ class CatalogApiTest extends TestCase
         $response->assertStatus(404);
     }
 
+    /** @test */
+    public function guest_can_view_category_details_with_filtered_and_sorted_products(): void
+    {
+        $laptops = Category::factory()->create([
+            'parent_id' => $this->category->id,
+            'name'      => 'Laptops',
+            'slug'      => 'laptops',
+            'is_active' => true,
+            'status'    => 'approved',
+        ]);
+
+        Category::factory()->create([
+            'parent_id' => $this->category->id,
+            'name'      => 'Pending Sub',
+            'slug'      => 'pending-sub',
+            'is_active' => true,
+            'status'    => 'pending',
+        ]);
+
+        $dell = Brand::factory()->create(['name' => 'Dell', 'slug' => 'dell', 'is_active' => true, 'status' => 'approved']);
+
+        Product::factory()->create([
+            'category_id'     => $laptops->id,
+            'brand_id'        => $dell->id,
+            'name'            => 'Dell XPS 15',
+            'slug'            => 'dell-xps-15',
+            'price'           => 1800,
+            'effective_price' => 1800,
+            'stock_quantity'  => 5,
+            'stock_status'    => 'in_stock',
+            'status'          => 'active',
+        ]);
+
+        Product::factory()->create([
+            'category_id' => $laptops->id,
+            'brand_id'    => $dell->id,
+            'name'        => 'Hidden Laptop',
+            'slug'        => 'hidden-laptop',
+            'status'      => 'inactive',
+        ]);
+
+        // Root category includes active products in root + approved child subcategories
+        $res = $this->getJson("/api/v1/categories/{$this->category->slug}?sort=price_desc");
+
+        $res->assertOk()
+            ->assertJsonPath('data.name', 'Electronics')
+            ->assertJsonPath('data.products_count', 2)
+            ->assertJsonCount(1, 'data.children')
+            ->assertJsonPath('data.children.0.slug', 'laptops')
+            ->assertJsonPath('data.products.items.0.slug', 'dell-xps-15')
+            ->assertJsonMissingPath('data.commission_rate')
+            ->assertJsonMissingPath('data.created_by');
+
+        // Subcategory + brand filter
+        $this->getJson("/api/v1/categories/{$this->category->slug}?sub=laptops&brand=dell")
+            ->assertOk()
+            ->assertJsonPath('data.products_count', 1)
+            ->assertJsonPath('data.products.items.0.slug', 'dell-xps-15');
+
+        // Unapproved subcategory is rejected (404), invalid sort is rejected (422)
+        $this->getJson("/api/v1/categories/{$this->category->slug}?sub=pending-sub")
+            ->assertStatus(404);
+
+        $this->getJson("/api/v1/categories/{$this->category->slug}?sort=invalid_sort")
+            ->assertStatus(422);
+    }
+
     // ─── Products ─────────────────────────────────────────────────
 
     /** @test */

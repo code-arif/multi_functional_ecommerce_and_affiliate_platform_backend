@@ -16,10 +16,10 @@ Route::prefix('v1')->group(function () {
 
     // Categories
     Route::prefix('categories')->middleware('throttle:api')->group(function () {
-        Route::get('/', [CategoryController::class, 'index']);
-        Route::get('navigation', [CategoryController::class, 'navigation']);
-        Route::get('popular', [CategoryController::class, 'popular']);
-        Route::get('{slug}', [CategoryController::class, 'show']);
+        Route::get('/', [CategoryController::class, 'index']); // DONE: Full active/approved category tree list
+        Route::get('navigation', [CategoryController::class, 'navigation']); // DONE: Lightweight navigation bar category list
+        Route::get('popular', [CategoryController::class, 'popular']); // DONE: Top 16 popular categories ordered by max orders
+        Route::get('{slug}', [CategoryController::class, 'show']); // DONE: Single category details with filtered product listing
     });
 
 
